@@ -63,24 +63,31 @@ f<-function(par){
   nll
 }
 
+pdf("ar1hess%03d.pdf", width=6, height=6, onefile=FALSE)
 dat$code = -1
 obj <- MakeADFun(f,par, silent=TRUE, random="x")
 cat("Deviance formulation:   ", paste0(round(system.time(opt<-nlminb(obj$par,obj$fn,obj$gr)),5)[3], "s, par = "))
 cat(c(opt$obj, opt$par), "\n")
+plot(Matrix::image(obj$env$spHess(random=TRUE), main="Deviances"))
 dat$code=0
 obj <- MakeADFun(f,par, silent=TRUE, random="x")
 cat("Sequential:             ", paste0(round(system.time(opt<-nlminb(obj$par,obj$fn,obj$gr)),5)[3], "s, par = "))
 cat(c(opt$obj, opt$par), "\n")
+plot(Matrix::image(obj$env$spHess(random=TRUE), main="Sequential"))
 dat$code=1
 obj <- MakeADFun(f,par, silent=TRUE, random="x")
 cat("dautoreg:               ", paste0(round(system.time(opt<-nlminb(obj$par,obj$fn,obj$gr)),5)[3], "s, par = "))
 cat(c(opt$obj, opt$par), "\n")
+plot(Matrix::image(obj$env$spHess(random=TRUE), main="dautoreg"))
 # works but really slow so turned off
 #dat$code=2
 #obj <- MakeADFun(f,par, silent=TRUE, random="x")
 #cat("dmvnorm:                ", paste0(round(system.time(opt<-nlminb(obj$par,obj$fn,obj$gr)),5)[3], "s, par = "))
 #cat(c(opt$obj, opt$par), "\n")
+#plot(Matrix::image(obj$env$spHess(random=TRUE), main="dmvnorm"))
 dat$code=3
 obj <- MakeADFun(f,par, silent=TRUE, random="x")
 cat("dgmrf:                  ", paste0(round(system.time(opt<-nlminb(obj$par,obj$fn,obj$gr)),5)[3], "s, par = "))
 cat(c(opt$obj, opt$par), "\n")
+plot(Matrix::image(obj$env$spHess(random=TRUE), main="dgmrf"))
+dev.off()

@@ -72,25 +72,31 @@ f<-function(par){
   nll
 }
 
-
+pdf("ma1hess%03d.pdf", width=6, height=6, onefile=FALSE)
 dat$code <- -1
 par <- list(logSigma=.1, tTheta=3, logSigmaObs=log(0.5), x=rep(0,length(x)+1))
 obj <- MakeADFun(f,par, silent=TRUE, random="x", map=list(logSigmaObs=as.factor(NA)))
 cat("eps :                   ", paste0(round(system.time(opt<-nlminb(obj$par,obj$fn,obj$gr)),5)[3], "s, par = "))
 cat(c(opt$obj, opt$par), "\n")
+plot(Matrix::image(obj$env$spHess(random=TRUE), main="Epsilons"))
 dat$code <- 0
 par <- list(logSigma=.1, tTheta=3, logSigmaObs=log(0.5), x=rep(0,length(x)), eps0=0)
 obj <- MakeADFun(f,par, silent=TRUE, random=c("x", "eps0"), map=list(logSigmaObs=as.factor(NA)))
 cat("seq :                   ", paste0(round(system.time(opt<-nlminb(obj$par,obj$fn,obj$gr)),5)[3], "s, par = "))
 cat(c(opt$obj, opt$par), "\n")
-dat$code <- 2
-par <- list(logSigma=.1, tTheta=3, logSigmaObs=log(0.5), x=rep(0,length(x)))
-obj <- MakeADFun(f,par, silent=TRUE, random="x", map=list(logSigmaObs=as.factor(NA)))
-cat("dmvnorm:                ", paste0(round(system.time(opt<-nlminb(obj$par,obj$fn,obj$gr)),5)[3], "s, par = "))
-cat(c(opt$obj, opt$par), "\n")
+plot(Matrix::image(obj$env$spHess(random=TRUE), main="Process and eps0"))
+# works, but very slow
+#dat$code <- 2
+#par <- list(logSigma=.1, tTheta=3, logSigmaObs=log(0.5), x=rep(0,length(x)))
+#obj <- MakeADFun(f,par, silent=TRUE, random="x", map=list(logSigmaObs=as.factor(NA)))
+#cat("dmvnorm:                ", paste0(round(system.time(opt<-nlminb(obj$par,obj$fn,obj$gr)),5)[3], "s, par = "))
+#cat(c(opt$obj, opt$par), "\n")
+#plot(Matrix::image(obj$env$spHess(random=TRUE), main="Process using dmvnorm"))
 dat$code <- 3
 par <- list(logSigma=.1, tTheta=3, logSigmaObs=log(0.5), x=rep(0,length(x)))
 obj <- MakeADFun(f,par, silent=TRUE, random="x", map=list(logSigmaObs=as.factor(NA)))
 cat("dmvnorm-sparse:         ", paste0(round(system.time(opt<-nlminb(obj$par,obj$fn,obj$gr)),5)[3], "s, par = "))
 cat(c(opt$obj, opt$par), "\n")
+plot(Matrix::image(obj$env$spHess(random=TRUE), main="Process"))
 
+dev.off()
