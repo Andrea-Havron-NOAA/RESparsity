@@ -1,5 +1,7 @@
 library(RTMB)
-
+library(tictoc)
+library(ggplot2)
+library(viridis)
 
 f<-function(par){
   getAll(dat,par)
@@ -95,3 +97,74 @@ grid_pars$all_eq[ii] <- as.numeric(all_eq)
 }
 
 # Result: all 8100 parameter sets above are identical
+grid_pars <- expand.grid(seed = 1:500, N = c(100, 500, 1000),
+                         sd = c(1),
+                         sdo = c(0.1), phi = c(0.9),
+                         time = NA)
+grid_pars_1 <- grid_pars
+grid_pars_1$model <- "Centered"
+grid_pars_2 <- grid_pars
+grid_pars_2$model <- "Non-centered"
+grid_pars_3 <- grid_pars
+grid_pars_3$model <- "dautoreg"
+grid_pars_4 <- grid_pars
+grid_pars_4$model <- "Sparse matrix"
+
+for(ii in 1:nrow(grid_pars)) {
+
+  set.seed(grid_pars$seed[ii])
+
+  N<-grid_pars$N[ii]
+  x <- numeric(N)
+  sd <- grid_pars$sd[ii]
+  sdo <- grid_pars$sdo[ii]
+  phi <- grid_pars$phi[ii]
+  # init condition
+  x[1] <- rnorm(1, sd=sqrt(sd*sd/(1-phi*phi)))
+  # simulate ss model
+  for(i in 2:N){
+    x[i] <- phi*x[i-1]+rnorm(1,sd=sd)
+  }
+  y <- x+rnorm(length(x), sd=sdo)
+
+  dat <- list(y=y, code=0)
+  par <- list(logSigma=runif(1,0.5,1.5), tPhi=1,
+              logSigmaObs=log(runif(1,0.5,1.5)), x=rep(0,length(x)))
+
+  dat$code = -1
+  tic()
+  f1 <- MakeADFun(f,par, silent=TRUE, random="x")
+  timr = toc()
+  grid_pars_1$time[ii] <- timr$toc - timr$tic
+
+  dat$code=0
+  tic()
+  f2 <- MakeADFun(f,par, silent=TRUE, random="x")
+  timr = toc()
+  grid_pars_2$time[ii] <- timr$toc - timr$tic
+
+  dat$code=1
+  tic()
+  f3 <- MakeADFun(f,par, silent=TRUE, random="x")
+  timr = toc()
+  grid_pars_3$time[ii] <- timr$toc - timr$tic
+
+  dat$code=3
+  tic()
+  f4 <- MakeADFun(f,par, silent=TRUE, random="x")
+  timr = toc()
+  grid_pars_4$time[ii] <- timr$toc - timr$tic
+}
+
+pars <- rbind(grid_pars_1, grid_pars_2, grid_pars_3, grid_pars_4)
+
+dplyr::group_by(pars, model, N) |>
+  dplyr::summarise(mean_time = mean(time), sd_time = sd(time)) |>
+  ggplot(aes(N, mean_time, color=model)) +
+  geom_line() +
+  scale_color_viridis_d(option="magma", begin=0.2, end=0.8) +
+  theme_bw() +
+  xlab("Time series length") +
+  ylab("Mean time (s)")
+ggsave("figures/ar1_simtest.png", width=6, height=5)
+
