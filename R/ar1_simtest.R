@@ -30,6 +30,12 @@ f<-function(par){
     nll <- nll - sum(dnorm(y, x, sdo, TRUE))
   }
 
+  if(code==-2){
+    nll <- nll - dnorm(x[1],0,sqrt(sd*sd/(1-phi*phi)),log=TRUE)
+    nll <- nll - sum(dnorm(x[-1],phi*x[-(length(x))],sd,log=TRUE))
+    nll <- nll - sum(dnorm(y, x, sdo, TRUE))
+  }
+
   if(code==1){
     nll <- nll - dautoreg(x,phi=phi,scale=sqrt(sd*sd/(1-phi*phi)), log=TRUE)
     nll <- nll - sum(dnorm(y, x, sdo, TRUE))
@@ -90,9 +96,13 @@ f3 <- MakeADFun(f,par, silent=TRUE, random="x")
 
 dat$code=3
 f4 <- MakeADFun(f,par, silent=TRUE, random="x")
+
+dat$code = -2
+f5 <- MakeADFun(f,par, silent=TRUE, random="x")
+
 # Test whether parameters are identical
 all_eq <- FALSE
-if(all.equal(f1$par, f2$par) && all.equal(f1$par, f3$par) && all.equal(f1$par, f4$par)) all_eq <- TRUE
+if(all.equal(f1$par, f2$par) && all.equal(f1$par, f3$par) && all.equal(f1$par, f4$par) && all.equal(f1$par, f5$par)) all_eq <- TRUE
 grid_pars$all_eq[ii] <- as.numeric(all_eq)
 }
 
@@ -109,6 +119,8 @@ grid_pars_3 <- grid_pars
 grid_pars_3$model <- "dautoreg"
 grid_pars_4 <- grid_pars
 grid_pars_4$model <- "Sparse matrix"
+grid_pars_5 <- grid_pars
+grid_pars_5$model <- "Alt-Non-centered"
 
 for(ii in 1:nrow(grid_pars)) {
 
@@ -154,9 +166,15 @@ for(ii in 1:nrow(grid_pars)) {
   f4 <- MakeADFun(f,par, silent=TRUE, random="x")
   timr = toc()
   grid_pars_4$time[ii] <- timr$toc - timr$tic
+
+  dat$code=-2
+  tic()
+  f5 <- MakeADFun(f,par, silent=TRUE, random="x")
+  timr = toc()
+  grid_pars_5$time[ii] <- timr$toc - timr$tic
 }
 
-pars <- rbind(grid_pars_1, grid_pars_2, grid_pars_3, grid_pars_4)
+pars <- rbind(grid_pars_1, grid_pars_2, grid_pars_3, grid_pars_4, grid_pars_5)
 
 dplyr::group_by(pars, model, N) |>
   dplyr::summarise(mean_time = mean(time), sd_time = sd(time)) |>
@@ -166,5 +184,5 @@ dplyr::group_by(pars, model, N) |>
   theme_bw() +
   xlab("Time series length") +
   ylab("Mean time (s)")
-ggsave("figures/ar1_simtest.png", width=6, height=5)
+ggsave("figures/ar1_simtest_alt.png", width=6, height=5)
 
