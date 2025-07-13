@@ -93,7 +93,7 @@ cat(c(opt$obj, opt$par), "\n")
 plot(Matrix::image(obj$env$spHess(random=TRUE), main="dgmrf"))
 dev.off()
 
-pdf("predict.pdf", width=12, height=6)
+pdf("predictar1.pdf", width=12, height=6)
   sdr <- sdreport(obj)
   pl <- as.list(sdr, "Est")
   plsd <- as.list(sdr, "Std")
