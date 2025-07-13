@@ -10,8 +10,8 @@ for(i in 2:N){
 }                  
 y <- x+rnorm(length(x), sd=sdo)
 
-dat <- list(y=y, code=0)
-par <- list(logSigma=0, tPhi=1, logSigmaObs=log(0.1), x=rep(0,length(x)))
+dat <- list(y=y, code=0, predict=100)
+par <- list(logSigma=0, tPhi=1, logSigmaObs=log(0.1), x=rep(0,length(x)+dat$predict))
 
 f<-function(par){
   getAll(dat,par)
@@ -19,8 +19,9 @@ f<-function(par){
   timeSteps <-length(x)
   sd <- exp(logSigma)
   sdo <- exp(logSigmaObs)
-  nll<-0
-
+  nll <- 0
+  oi <- 1:length(y)
+  
   if(code==-1){  
     nll <- nll -dnorm(x[1],0,sqrt(sd*sd/(1-phi*phi)),log=TRUE)
     nll <- nll -sum(dnorm(x[-1],0,sd,log=TRUE))
@@ -29,7 +30,7 @@ f<-function(par){
     for(i in 2:timeSteps){    
       lam[i] <- phi*lam[i-1]+x[i] 
     }
-    nll <- nll - sum(dnorm(y, lam, sdo, TRUE))
+    nll <- nll - sum(dnorm(y, lam[oi], sdo, TRUE))
   }
   
   if(code==0){
@@ -37,19 +38,19 @@ f<-function(par){
     for(i in 2:timeSteps){    
       nll <- nll -dnorm(x[i],phi*x[i-1],sd,log=TRUE)
     }
-    nll <- nll - sum(dnorm(y, x, sdo, TRUE))
+    nll <- nll - sum(dnorm(y, x[oi], sdo, TRUE))
   }
   
   if(code==1){
     nll <- nll - dautoreg(x,phi=phi,scale=sqrt(sd*sd/(1-phi*phi)), log=TRUE)
-    nll <- nll - sum(dnorm(y, x, sdo, TRUE))  
+    nll <- nll - sum(dnorm(y, x[oi], sdo, TRUE))  
   }
 
   if(code==2){
     t<-1:length(x)  
     S <- sd^2/(1-phi^2)*phi^abs(outer(t,t,"-"))  
     nll <- nll - dmvnorm(x,0,S,log=TRUE)
-    nll <- nll - sum(dnorm(y, x, sdo, TRUE))
+    nll <- nll - sum(dnorm(y, x[oi], sdo, TRUE))
   }
 
   if(code==3){
@@ -57,7 +58,7 @@ f<-function(par){
     diag(Q)<-c(1,rep(1+phi^2, timeSteps-2),1)
     Q[abs(row(Q)-col(Q))==1] <- -phi
     nll <- nll - dgmrf(x, Q=Q, scale=sd, log=TRUE)
-    nll <- nll - sum(dnorm(y, x, sdo, TRUE))
+    nll <- nll - sum(dnorm(y, x[oi], sdo, TRUE))
   }
   ADREPORT(phi)
   nll
@@ -90,4 +91,14 @@ obj <- MakeADFun(f,par, silent=TRUE, random="x")
 cat("dgmrf:                  ", paste0(round(system.time(opt<-nlminb(obj$par,obj$fn,obj$gr)),5)[3], "s, par = "))
 cat(c(opt$obj, opt$par), "\n")
 plot(Matrix::image(obj$env$spHess(random=TRUE), main="dgmrf"))
+dev.off()
+
+pdf("predict.pdf", width=12, height=6)
+  sdr <- sdreport(obj)
+  pl <- as.list(sdr, "Est")
+  plsd <- as.list(sdr, "Std")
+  plot(y, xlim=c(1,length(pl$x)), ylim=c(min(pl$x-2*plsd$x), max(pl$x+2*plsd$x)))
+  lines(pl$x, lwd=2, col="navy")
+  lines(pl$x-2*plsd$x, lwd=2, lty="dashed", col="navy")
+  lines(pl$x+2*plsd$x, lwd=2, lty="dashed", col="navy")
 dev.off()
