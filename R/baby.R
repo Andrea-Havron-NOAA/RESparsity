@@ -36,6 +36,8 @@ dat$noParUS <- sapply(1:length(dat$fleetTypes),
                         A <- sum(!is.na(dat$keySd[f,]))
                         ifelse(dat$covType[f]==2, (A*A-A)/2, 0)
                       })
+# AR type flag
+dat$ar1code <- -1 # NULL option, defaults to srmode (options: -2, 0=centered,-1=non-centered)
 
 
 #dat$logobs[c(7,9,13)+100]<-NA
@@ -54,6 +56,7 @@ par$parUS <- numeric(sum(dat$noParUS))
 par$logN <- matrix(0, nrow=length(dat$year), ncol=length(dat$age))
 par$logF <- matrix(0, nrow=length(dat$year), ncol=max(dat$keyF)+1)
 par$missing <- numeric(sum(is.na(dat$logobs)))
+par$tPhi <- if(dat$ar1code==-2){numeric(0)}else{(1)} # AR phi for recruitment
 
 ##############
 
@@ -85,15 +88,27 @@ jnll<-function(par){
   sdF <- exp(logsdF)
   sd <- exp(logsd)
 
+  phi <- 2*plogis(tPhi)-1
 
   logobs <- logobs+numeric(1) ## hack to make advector
   logobs[is.na(logobs)] <- missing  ##patch missing
 
   logFF <- logF[,keyF+1] ## expand F
 
+
   ssb <- ssbFUN(logN,logFF,M,SW,MO,PF,PM)
 
   jnll <- 0
+
+  # AR1 init conditions
+  # centered + non-centered
+  if(ar1code%in%c(0,-1)) {
+    jnll <- jnll -dnorm(logN[1,1],0,sqrt(sdR*sdR/(1-phi*phi)),log=TRUE)
+  }
+
+  # devs for non-centered AR1 approach
+  lam <- numeric(length(nrow)) # lam <- numeric(nrow)
+  lam[1] <- 0 + logN[1]
 
   for(y in 2:nrow){
     thisSSB <- ifelse((y-minAge-1)>(-.5),ssb[y-minAge],ssb[1])
@@ -108,8 +123,32 @@ jnll<-function(par){
       predN <- bhpar[1]+log(thisSSB)-log(1.0+exp(bhpar[2])*thisSSB)
     }
 
-    jnll <- jnll - dnorm(logN[y,1],predN,sdR,TRUE)
+    # no AR1
+    if(ar1code==-2){
+      jnll <- jnll - dnorm(logN[y,1],predN,sdR,TRUE)
+    }
+    # centered
+    if(ar1code==0){
+      jnll <- jnll - dnorm(logN[y,1],phi*predN,sdR,TRUE)
+    }
+    # non-centered
+    if(ar1code==-1){
+      jnll <- jnll - dnorm(logN[y,1],0,sdR,TRUE)
+      # # devs
+      # lam[y] <- phi*lam[y-1]+logN[y]
+      # jnll <- jnll - dnorm()
+
+      }
+
+
+
   }
+
+  # non-centered
+  if(ar1code==-1){
+    jnll <- jnll -sum(dnorm(logN[-1,1],0,sdR,log=TRUE))
+  }
+
 
   for(y in 2:nrow){
     for(a in 2:ncol){
@@ -233,9 +272,14 @@ obj <- MakeADFun(jnll, par, random=c("logN", "logF", "missing"), map=list(logsdF
 opt <- nlminb(obj$par, obj$fn, obj$gr, control=list(eval.max=1000, iter.max=1000))
 opt$objective
 
-#sdr<-sdreport(obj)
-
-#pl<-as.list(sdr, "Est")
-
+stockassessment::ssbplot(fit)
+sdr<-sdreport(obj)
+sdr
+2*plogis(7.89793425)-1
+plr<-as.list(sdr,report=TRUE, "Est")
+plrsd<-as.list(sdr,report=TRUE, "Std")
+lines(dat$year, plr$ssb, lwd=3, col="darkred")
+lines(dat$year, plr$ssb-2*plrsd$ssb, lwd=3, col="darkred", lty="dotted")
+lines(dat$year, plr$ssb+2*plrsd$ssb, lwd=3, col="darkred", lty="dotted")
 
 
