@@ -37,7 +37,7 @@ dat$noParUS <- sapply(1:length(dat$fleetTypes),
                         ifelse(dat$covType[f]==2, (A*A-A)/2, 0)
                       })
 # AR type flag
-dat$ar1code <- -1 # NULL option, defaults to srmode (options: -2, 0=centered,-1=non-centered)
+dat$ar1code <- -1 # -2 (options: -2=no AR1, 0=centered,-1=non-centered)
 
 
 #dat$logobs[c(7,9,13)+100]<-NA
@@ -103,14 +103,11 @@ jnll<-function(par){
   # AR1 init conditions
   # centered + non-centered
   if(ar1code%in%c(0,-1)) {
-    jnll <- jnll -dnorm(logN[1,1],0,sqrt(sdR*sdR/(1-phi*phi)),log=TRUE)
+    jnll <- jnll -dnorm(logN[1,1],0, sdR/sqrt(1-phi^2),log=TRUE)
   }
 
-  # devs for non-centered AR1 approach
-  lam <- numeric(length(nrow)) # lam <- numeric(nrow)
-  lam[1] <- 0 + logN[1]
-
   for(y in 2:nrow){
+
     thisSSB <- ifelse((y-minAge-1)>(-.5),ssb[y-minAge],ssb[1])
 
     if(srmode==0){
@@ -122,7 +119,6 @@ jnll<-function(par){
     if(srmode==2){
       predN <- bhpar[1]+log(thisSSB)-log(1.0+exp(bhpar[2])*thisSSB)
     }
-
     # no AR1
     if(ar1code==-2){
       jnll <- jnll - dnorm(logN[y,1],predN,sdR,TRUE)
@@ -131,25 +127,16 @@ jnll<-function(par){
     if(ar1code==0){
       jnll <- jnll - dnorm(logN[y,1],phi*predN,sdR,TRUE)
     }
-    # non-centered
+    # non-centered:
+    # x[t] = p * x[t - 1] + sigma * z[t];
+    # z[t]=(x[t]-p*x[t-1])/sigma
     if(ar1code==-1){
-      jnll <- jnll - dnorm(logN[y,1],0,sdR,TRUE)
-      # # devs
-      # lam[y] <- phi*lam[y-1]+logN[y]
-      # jnll <- jnll - dnorm()
-
-      }
-
-
+      jnll <- jnll - dnorm((logN[y,1]-phi*logN[y-1,1])/sdR,0,1,TRUE)
+    }
 
   }
-
-  # non-centered
-  if(ar1code==-1){
-    jnll <- jnll -sum(dnorm(logN[-1,1],0,sdR,log=TRUE))
-  }
-
-
+  logrec <- as.vector(logN[,1]) + numeric(1)
+  # remaining N matrix
   for(y in 2:nrow){
     for(a in 2:ncol){
       predN <- logN[y-1,a-1]-exp(logFF[y-1,a-1])-M[y-1,a-1]
@@ -264,6 +251,7 @@ jnll<-function(par){
   }
   REPORT(logPred)
   ADREPORT(ssb)
+  ADREPORT(logrec)
   jnll
 }
 
@@ -275,11 +263,34 @@ opt$objective
 stockassessment::ssbplot(fit)
 sdr<-sdreport(obj)
 sdr
-2*plogis(7.89793425)-1
-plr<-as.list(sdr,report=TRUE, "Est")
-plrsd<-as.list(sdr,report=TRUE, "Std")
-lines(dat$year, plr$ssb, lwd=3, col="darkred")
-lines(dat$year, plr$ssb-2*plrsd$ssb, lwd=3, col="darkred", lty="dotted")
-lines(dat$year, plr$ssb+2*plrsd$ssb, lwd=3, col="darkred", lty="dotted")
+pl<-as.list(sdr,report=TRUE, "Est")
 
+plsd<-as.list(sdr,report=TRUE, "Std")
+lines(dat$year, pl$ssb, lwd=3, col="darkred")
+lines(dat$year, pl$ssb-2*plsd$ssb, lwd=3, col="darkred", lty="dotted")
+lines(dat$year, pl$ssb+2*plsd$ssb, lwd=3, col="darkred", lty="dotted")
 
+library(ggplot2);library(dplyr)
+pl$logrec
+data.frame(year=dat$year,
+           rec=exp(pl$logrec),
+           up=exp(pl$logrec+2*plsd$logrec),
+           lw=exp(pl$logrec-2*plsd$logrec)) %>%
+  ggplot(aes(x=year, y=rec))+
+           geom_bar(stat="identity")+
+  geom_errorbar(aes(ymax=up,ymin=lw),col="black")
+
+par <- as.list(sdr, what = "Est")
+parsd <- as.list(sdr, what = "Std")
+2*plogis(par$tPhi)-1
+
+hes <- obj$env$spHess(random=TRUE)
+eigval <- eigen(hes,symmetric=TRUE,only.values=TRUE)$values
+print(eigval) # no 0s, negative vals
+
+par$logsdR <- log(0.3)
+par$logN[,] <- rnorm(length(par$logN), 0, 0.2)
+par$logF[,] <- log(0.2)
+
+obj <- MakeADFun(jnll, par, random=c("logN", "logF", "missing"), map=list(logsdF=as.factor(rep(0,length(par$logsdF)))), silent=FALSE)
+opt <- nlminb(obj$par, obj$fn, obj$gr, control=list(eval.max=1000, iter.max=1000))
