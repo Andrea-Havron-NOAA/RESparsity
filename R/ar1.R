@@ -7,7 +7,7 @@ phi <- .9
 x[1] <- rnorm(1, sd=sqrt(sd*sd/(1-phi*phi)))
 for(i in 2:N){
   x[i] <- phi*x[i-1]+rnorm(1,sd=sd)
-}                  
+}
 y <- x+rnorm(length(x), sd=sdo)
 
 dat <- list(y=y, code=0, predict=100)
@@ -21,34 +21,37 @@ f<-function(par){
   sdo <- exp(logSigmaObs)
   nll <- 0
   oi <- 1:length(y)
-  
-  if(code==-1){  
+
+  # non-centered
+  if(code==-1){
     nll <- nll -dnorm(x[1],0,sqrt(sd*sd/(1-phi*phi)),log=TRUE)
     nll <- nll -sum(dnorm(x[-1],0,sd,log=TRUE))
     lam <- numeric(length(x))
     lam[1] <- 0+x[1]
-    for(i in 2:timeSteps){    
-      lam[i] <- phi*lam[i-1]+x[i] 
+    for(i in 2:timeSteps){
+      lam[i] <- phi*lam[i-1]+x[i]
     }
     nll <- nll - sum(dnorm(y, lam[oi], sdo, TRUE))
   }
-  
+
+  # centered
   if(code==0){
     nll <- nll -dnorm(x[1],0,sqrt(sd*sd/(1-phi*phi)),log=TRUE)
-    for(i in 2:timeSteps){    
+    for(i in 2:timeSteps){
       nll <- nll -dnorm(x[i],phi*x[i-1],sd,log=TRUE)
     }
     nll <- nll - sum(dnorm(y, x[oi], sdo, TRUE))
   }
-  
+
+  # density AR1 and SCALE
   if(code==1){
     nll <- nll - dautoreg(x,phi=phi,scale=sqrt(sd*sd/(1-phi*phi)), log=TRUE)
-    nll <- nll - sum(dnorm(y, x[oi], sdo, TRUE))  
+    nll <- nll - sum(dnorm(y, x[oi], sdo, TRUE))
   }
 
   if(code==2){
-    t<-1:length(x)  
-    S <- sd^2/(1-phi^2)*phi^abs(outer(t,t,"-"))  
+    t<-1:length(x)
+    S <- sd^2/(1-phi^2)*phi^abs(outer(t,t,"-"))
     nll <- nll - dmvnorm(x,0,S,log=TRUE)
     nll <- nll - sum(dnorm(y, x[oi], sdo, TRUE))
   }
