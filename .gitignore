@@ -48,5 +48,10 @@ po/*~
 # RStudio Connect folder
 rsconnect/
 
-# figs
+# figs/qmd output
 *.pdf
+*.png
+*.html
+*.js
+*.woff
+*.css
