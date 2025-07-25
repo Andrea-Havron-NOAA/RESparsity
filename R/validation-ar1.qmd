@@ -1,0 +1,323 @@
+---
+title: "validation-ar1"
+---
+
+Original model code from Anders Nielsen.
+
+# **Summary**
+
+This document implements **model validation** techniques for an **AR(1)-Poisson state-space model** using `RTMB`. The validation steps include:
+
+-   **One-step-ahead residuals**
+-   **Jitter analysis**
+-   **Simulation-based validation**
+-   **Laplace approximation check**
+
+1.  The **latent state** $\gamma_i$ follows an AR(1) Gaussian process:
+
+$$
+(\gamma_i-\mu) \sim \mathcal{N}(\phi(\gamma_{i-1}-\mu),\sigma^2)
+$$ or
+
+$$
+\gamma_i=\mu+\phi(\gamma_{i-1}-\mu)+\epsilon_i, \text{ } \epsilon_i\sim \mathcal{N}(0,\sigma^2)
+$$ where:
+
+-   $\mu$ is the mean level of the latent process.
+
+-   $\phi$ is the autoregressive coefficient, transformed as: $$
+    \phi=2*\text{plogis}(\text{phiTrans})-1
+    $$ which ensures $\phi$ remains in the range (-1,1).
+
+-   $\sigma$ is the process standard deviation.
+
+-   The stationary variance of the process is $$
+    \text{Var}(\gamma)=\frac{\sigma^2}{(1-\phi^2)}
+    $$
+
+-   The joint negative log-likelihood for this process is computed using the AR(1) normal density, which is computed using the `RTMB` function `dautoreg(gamma, mu, phi, scale, log=TRUE)`. $$
+    \text{NLL}_\text{latent}=-\sum_i \text{log}p(\gamma_i|\gamma_{i-1})
+    $$ 2. The **observed data** $y_i$ follows a Poisson distribution with mean $e^{\gamma_i}$: $$
+    y_i \sim \text{Poisson}(\lambda_i), \text{ } \lambda_i=e^{\gamma_i}
+    $$
+
+-   This ensures that $y_i$ is always non-negative.
+
+-   The NLL contribution from the Poission model is: $$
+    \text{NLL}_\text{obs}=-\sum_i \text{log}p(y_i|\gamma_i)
+    $$ \### **1. Load Required Libraries and Data**
+
+```{r setup, message=FALSE, warning=FALSE}
+#| echo: true
+#| results: hide
+#| message: false
+#| warning: false
+
+library(RTMB)
+library(MASS)  # For multivariate normal simulation
+library(ggplot2)
+
+# Load the CPUE data
+load("cpue.RData")
+
+# Prepare data list for RTMB
+dat <- list(y = y)  # Observation data
+par <- list(mu = 0, logSigma = 0, phiTrans = 0, gamma = rep(0, length(dat$y)))
+
+```
+
+### **2. Define the State-Space Model**
+
+```{r objfun}
+#| echo: true
+#| results: hide
+#| message: false
+#| warning: false
+
+f <- function(par) {
+  getAll(dat, par)
+  y <- OBS(y)  
+  phi <- 2 * plogis(phiTrans) - 1
+  sd <- exp(logSigma) 
+
+  # Negative log-likelihood
+  jnll <- -dautoreg(gamma, mu = mu, phi = phi, scale = sqrt(sd^2 / (1 - phi^2)), log = TRUE)   
+  jnll <- jnll - sum(dpois(y, exp(gamma), log = TRUE))
+
+  # Report parameters for diagnostics
+  REPORT(mu)
+  REPORT(phi)
+  stepsd <- sd  
+  REPORT(stepsd)
+
+  return(jnll)
+}
+
+# Create the model object
+obj <- MakeADFun(f, par, random = "gamma")
+
+# Fit the model
+fit <- nlminb(obj$par, obj$fn, obj$gr)
+
+```
+
+### **3. Residual Analysis**
+
+#### **3.1 One-step Ahead Residuals**
+
+Under a correctly specified model, OSA residuals should be standard normal $\mathcal{N}(0,1)$.
+
+```{r osa}
+#| echo: true
+#| results: hide
+#| message: false
+#| warning: false
+
+# Compute OSA residuals. Here we are using the "oneStepGeneric" method because
+# the observations are assumed to be not-normal (they are Poisson), which a
+# discrete distribution. We are also providing a range of possible values for
+# the observations. Poisson observations are generally counts, therefore, the
+# range is 0 to Inf. For binomial or multinomial, we could also use the
+# discreteSupport argument and supply the range of possible values
+osa <- oneStepPredict(obj, method = "oneStepGeneric", discrete = TRUE, range = c(0, Inf))
+```
+
+```{r osaplot}
+# Q-Q Plot
+qqnorm(osa$residual, main = "One-Step-Ahead Residuals")
+abline(0,1)
+```
+
+#### **3.2 Process Residuals**
+
+Here we compute process residuals for the latent state $\gamma$ using its estimated covariance structure. This is useful for model validation, specifically checking whether the latent state behaves as expected under the fitted autoregressive model.
+
+These standardized residuals should approximately follow a standard normal distribution $\mathcal{N}(0,1)$ if the model is correct. Any deviations indicate model misspecification or biases in the latent state process.
+
+The process residual formula:
+
+$$
+z_i=\frac{(\gamma_{i}^{*}-\mu)-\phi(\gamma_{i-1}^{*}-\mu)}{\sigma}
+$$
+
+where the numerator computes the deviation from the expected AR(1) process and the denominator standardizes the residual by dividing by the estimated process standard deviation.
+
+```{r procRes}
+#| echo: true
+#| results: hide
+#| message: false
+#| warning: false
+
+# Extract summary statistics (mean and standard errors) for gamma, the random effects in the model
+sdr <- sdreport(obj)
+gammaEst <- summary(sdr, "random")
+
+# obj$env$spHess() Computes the Hessian matrix (second derivative of the
+# log-likelihood) for the random effects at the MLE, which provides an estimate
+# of uncertainty and correlations between the latent states; solve() computes
+# the inverse of the Hessian, which is an approximate covariance matrix for the
+# latent states
+gammaCovariance <- solve(obj$env$spHess(obj$env$last.par.best, random = TRUE))
+
+# Simulate gamma values from estimated covariance
+gammaStar <- MASS::mvrnorm(1, gammaEst[, 1], gammaCovariance)
+
+# Compute standardized residuals
+rep <- obj$report()
+zResid <- ((gammaStar[-1] - rep$mu) - rep$phi * (gammaStar[-length(gammaStar)] - rep$mu)) / rep$stepsd
+```
+
+```{r procResplot}
+# Q-Q Plot for Process Residuals
+qqnorm(zResid, main = "Process Residuals")
+abline(0,1)
+sd(zResid) # standard deviation should be 1
+```
+
+### **4. Jitter Analysis**
+
+Jitter analysis evaluates model stability by perturbing parameter starting values and re-fitting the model.
+
+```{r jitter}
+#| echo: true
+#| results: hide
+#| message: false
+#| warning: false
+
+dojit <- function() {
+  suppressMessages(nlminb(obj$par + rnorm(length(obj$par), sd = 0.1), obj$fn, obj$gr)$par)
+}
+jit <- replicate(100, dojit())
+```
+
+```{r jitterplot}
+boxplot(t(jit), main = "Jitter Analysis of Parameter Estimates")
+```
+
+### **5. Simulation Study**
+
+#### **5.1 Full Simulation**
+
+Simulate new data sets, re-fit the model, and compare the parameter estimates.
+
+```{r fullsim}
+#| echo: true
+#| results: hide
+#| message: false
+#| warning: false
+
+odat <- dat  # Save original data
+
+dofullsim <- function() {
+  dat <<- list()  # <<- Resets dataset in the global environment
+  dat$y <<- obj$simulate()$y  # Simulate new observations, again updating the global environment
+  # Build model object and optimize
+  objsim <- MakeADFun(f, par, random = "gamma", silent = TRUE)
+  fitsim <- nlminb(objsim$par, objsim$fn, objsim$gr)
+  return(fitsim$par)
+}
+
+sim <- replicate(100, dofullsim())
+dat <- odat  # Restore original data
+```
+
+```{r fullsimplot}
+boxplot(t(sim), main = "Simulation-Based Validation")
+points(1:length(fit$par), fit$par, cex = 5, pch = 4, lwd = 3, col = "darkgreen")
+```
+
+#### **5.2 Conditional Simulation**
+
+Instead of simulating entirely new data sets, we simulate conditionally on the MLE.
+
+```{r conditionalsim}
+#| echo: true
+#| results: hide
+#| message: false
+#| warning: false
+
+odat <- dat  # Save original data
+
+docondsim <- function(){
+    dat <- list()  # Local dat
+    sdr <- sdreport(obj)
+    pl <- as.list(sdr, "Est") 
+    objcon <- MakeADFun(f, pl, silent=TRUE) # Simulate data conditional on MLE
+    dat$y <<- objcon$simulate()$y  # need to update the dat object in the global env to make it accessible to MakeADFun
+    objsim <- MakeADFun(f, par, random = "gamma", silent=TRUE)
+    fitsim <- nlminb(objsim$par, objsim$fn, objsim$gr)
+    as.list(sdreport(objsim),"Est")$gamma
+}
+sim <- replicate(100, docondsim())
+dat <- odat  # Restore original data
+
+```
+
+```{r conditionalsimplot}
+matplot(sim, type="l")
+lines(as.list(sdreport(obj),"Est")$gamma, lwd=5, col="darkgreen")
+```
+
+### **6. Laplace Approximation Check**
+
+To validate the Laplace approximation, we check the expectation of the gradient.
+
+The `checkConsistency()` function in `RTMB` helps diagnose biases introduced by the Laplace approximation, which is used to integrate out the random effects.
+
+The `checkConsistency()` function in `RTMB` evaluates whether the Laplace approximation (used to integrate out the random effects) is valid by computing the expected gradient of the log-likelihood. The function runs simulations to check whether the parameter estimates are biased and reports joint vs. marginal bias tests.
+
+It does this by in two ways:
+
+**Joint Consistency Check:** Tests whether the entire parameter vector is estimated without bias by checking whether the expectation of the full gradient vector is zero across all parameters. Mathematically: $$
+E_{\theta}[\nabla\ell(\theta;X)]=0
+$$ where:
+
+-   $\nabla\ell(\theta;X)$ is the gradient (first derivative) of the negative log-likelihood with respect to all parameters $\theta$.
+
+-   If the Laplace approximation is unbiased, the gradient should average to zero over many simulations.
+
+-   This is tested using a p-value:
+
+    -   p-value \> 0.05 –\> No significant bias (Laplace approximation is valid).
+
+    -   p-value \< 0.05 –\> Possible bias (Laplace approximation may be incorrect; consider MCMC instead of Laplace).
+
+-   If the joint consistency fails, it suggests that the model may have a problem properly integrating out the random effects.
+
+-   The parameter biases that are reported from the joint check consider correlations among parameters. Therefore, if two parameters are correlated, adjusting one may reduce bias in another.
+
+-   The bias estimates are absolute values and therefore the magnitude of the bias should be considered in the context of the parameter estimate.
+
+**Marginal Consistency Check:** Tests whether each individual parameter is estimated without bias by checking whether that parameter's expectation of the gradient of the negative log-likelihood is zero. Mathematically:
+
+$$
+E_{\theta_j}\left[\frac{\partial\ell(\theta;X)}{\partial\theta_j}\right]=0
+$$
+
+for each parameter $\theta_j$.
+
+-   A single p-value is output in the marginal bias test, which tests the null hypothesis that, on average, the set of fixed-effects parameters does not have significant bias when considered individually.
+
+    -   p-value \> 0.05 –\> No significant bias on average across all fixed-effect parameters.
+
+    -   p-value \< 0.05 –\> Possible bias (consider priors on certain parameters, or improving model specification through transformations)
+
+-   The parameter biases that are reported from the marginal check considers each parameter independently, thus ingoring correlations among parameters.
+
+-   The bias estimates are absolute values and therefore the magnitude of the bias should be considered in the context of the parameter estimate.
+
+```{r check}
+#| echo: true
+#| results: hide
+#| message: false
+#| warning: false
+
+checks <- checkConsistency(obj, n = 500)
+checks <- summary(checks)
+```
+
+```{r checkout}
+# Print results
+print(checks$joint)  # p-value > 0.05 means simulation is implemented correctly
+print(checks$marginal)  # Significant bias would indicate issues
+```

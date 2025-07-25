@@ -20,7 +20,7 @@ dat$MO <- fit$data$propMat
 dat$PF <- fit$data$propF
 dat$PM <- fit$data$propM
 
-dat$srmode <- 2
+dat$srmode <- 0
 dat$fcormode <- 2
 dat$keyF <- fit$conf$keyLogFsta[1,]
 dat$keyQ <- fit$conf$keyLogFpar
@@ -78,6 +78,8 @@ ssbFUN <- function(logN, logFF, M, SW, MO, PF, PM){
 
 jnll<-function(par){
   getAll(par, dat)
+
+  logobs <- OBS(logobs)
 
   nobs <- length(logobs)
   nrow <- nrow(M)
