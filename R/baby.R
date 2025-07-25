@@ -286,13 +286,35 @@ par <- as.list(sdr, what = "Est")
 parsd <- as.list(sdr, what = "Std")
 2*plogis(par$tPhi)-1
 
-hes <- obj$env$spHess(random=TRUE)
-eigval <- eigen(hes,symmetric=TRUE,only.values=TRUE)$values
-print(eigval) # no 0s, negative vals
 
-par$logsdR <- log(0.3)
-par$logN[,] <- rnorm(length(par$logN), 0, 0.2)
-par$logF[,] <- log(0.2)
 
-obj <- MakeADFun(jnll, par, random=c("logN", "logF", "missing"), map=list(logsdF=as.factor(rep(0,length(par$logsdF)))), silent=FALSE)
-opt <- nlminb(obj$par, obj$fn, obj$gr, control=list(eval.max=1000, iter.max=1000))
+plot(dat$year, pl$ssb, lwd=3, col="darkred", ylim=c(min(pl$ssb-2*plsd$ssb-100), max(pl$ssb+2*plsd$ssb+100)))
+lines(dat$year, pl$ssb-2*plsd$ssb, lwd=3, col="darkred", lty="dotted")
+lines(dat$year, pl$ssb+2*plsd$ssb, lwd=3, col="darkred", lty="dotted")
+
+
+odat <- dat # save a copy of the orig data set
+
+# let's try to simulate some logobs based on phi=0.55, tphi~=1.238
+2*plogis(1.238)-1
+
+
+sdr<-sdreport(obj)
+sdr
+pl<-as.list(sdr,"Est")
+pl$tPhi <- 1.238 # phi=0.55, tphi~=1.238
+objcon
+
+docondsim <- function(){
+  dat <- list()  # Local dat
+  sdr <- sdreport(obj)
+  pl <- as.list(sdr, "Est")
+  objcon <- MakeADFun(f, pl, silent=TRUE) # Simulate data conditional on MLE
+  dat$y <<- objcon$simulate()$y  # need to update the dat object in the global env to make it accessible to MakeADFun
+  objsim <- MakeADFun(jnll, par, random = "gamma", silent=TRUE)
+  fitsim <- nlminb(objsim$par, objsim$fn, objsim$gr)
+  as.list(sdreport(objsim),"Est")$gamma
+}
+sim <- replicate(100, docondsim())
+dat <- odat  # Restore original data
+
