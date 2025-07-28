@@ -293,8 +293,12 @@ obj_centered <- MakeADFun(jnll, par_centered,
                           random=c("logN", "logF", "missing"),
                           map=list(logsdF=as.factor(rep(0,length(par$logsdF)))),
                           silent=TRUE)
+
 opt <- nlminb(obj_centered$par, obj_centered$fn, obj_centered$gr,
               control=list(eval.max=1000, iter.max=1000))
+
+simtst <- obj_centered$simulate(par=obj_centered$env$last.par.best)
+
 sdr_centered <- sdreport(obj_centered)
 
 ###################################################################################
