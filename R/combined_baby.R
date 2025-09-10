@@ -117,6 +117,11 @@ jnll <- function(par){
 
     # 3. Set recruitment as random walk + transformed deviations
     for(y in 1:nrow){
+
+      if(y > 1) {
+        thisSSB <- ifelse((y-minAge-1)>(-.5), ssb[y-minAge], ssb[1])
+      }
+
       if(srmode==0){
         logN[y,1] <- rec_dev[y]  # AR(1) process
       }
