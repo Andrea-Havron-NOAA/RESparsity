@@ -388,15 +388,15 @@ all((abs(diag(sdr_centered_no_int$cov.fixed) - diag(sdr_noncentered_noint$cov.fi
 ###################################################################################
 # Test that all recruitment is the same
 ###################################################################################
-logN_vals <- sdr_centered$par.random[which(names(sdr_centered$par.random) == "logN")]
+logN_vals <- sdr_centered_no_int$par.random[which(names(sdr_centered_no_int$par.random) == "logN")]
 logN_matrix <- matrix(logN_vals, nrow = nyr, ncol = nage)
-(abs(sdr_centered$par.random - sdr_noncentered$par.random) < 0.001)
+
 # For the centered model, this is the first column of logN
 recruitment_centered <- logN_matrix[,1]
 # For non - centered model, this is a little trickier
 # xxtract z innovations
-z <- sdr_noncentered$par.random[names(sdr_noncentered$par.random) == "z"]
-phi <- 2*plogis(sdr_noncentered$par.fixed["tPhi"]) - 1
+z <- sdr_noncentered_noint$par.random[names(sdr_noncentered_noint$par.random) == "z"]
+phi <- 2*plogis(sdr_noncentered_noint$par.fixed["tPhi"]) - 1
 # Transform z to rec_dev (the AR(1) process)
 nyr <- length(recruitment_centered)
 rec_dev <- numeric(nyr)
@@ -406,5 +406,30 @@ for(i in 2:nyr) {
 }
 # For srmode=0, logN[,1] should equal rec_dev
 recruitment_noncentered <- rec_dev
+# Test whether these equal
+all((abs(recruitment_noncentered - recruitment_centered) < 0.001))
+
+
+
+# This is the same test for the versions of the model with the intercept
+logN_vals <- sdr_centered_int$par.random[which(names(sdr_centered_int$par.random) == "logN")]
+logN_matrix <- matrix(logN_vals, nrow = nyr, ncol = nage)
+
+# For the centered model, this is the first column of logN
+recruitment_centered <- logN_matrix[,1]
+# For non - centered model, this is a little trickier
+# xxtract z innovations
+z <- sdr_noncentered_int$par.random[names(sdr_noncentered_int$par.random) == "z"]
+phi <- 2*plogis(sdr_noncentered_int$par.fixed["tPhi"]) - 1
+# Transform z to rec_dev (the AR(1) process)
+nyr <- length(recruitment_centered)
+rec_dev <- numeric(nyr)
+rec_dev[1] <- z[1]  # initial condition
+for(i in 2:nyr) {
+  rec_dev[i] <- phi * rec_dev[i-1] + z[i]
+}
+# For srmode=0, logN[,1] should equal rec_dev
+rec_intercept <- sdr_noncentered_int$par.fixed["rec_intercept"]
+recruitment_noncentered <- rec_intercept + rec_dev
 # Test whether these equal
 all((abs(recruitment_noncentered - recruitment_centered) < 0.001))
