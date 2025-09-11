@@ -39,6 +39,7 @@ dat$noParUS <- sapply(1:length(dat$fleetTypes),
 
 # AR type flag
 dat$ar1code <- -1  # 0 = centered, -1 = non-centered
+dat$est_rec_intercept <- FALSE # Flag to estimate recruitment intercept
 
 # Parameter section
 par <- list()
@@ -57,6 +58,7 @@ par$logF <- matrix(0, nrow=length(dat$year), ncol=max(dat$keyF)+1)
 par$missing <- numeric(sum(is.na(dat$logobs)))
 par$tPhi <- 1  # AR phi for recruitment
 par$z <- rep(0, length(dat$year))  # Standard normal innovations
+par$rec_intercept <- 0 # mapped off if not estimated
 
 ##############
 
@@ -117,23 +119,23 @@ jnll <- function(par){
 
     # 3. Set recruitment as random walk + transformed deviations
     for(y in 1:nrow){
-
       if(y > 1) {
         thisSSB <- ifelse((y-minAge-1)>(-.5), ssb[y-minAge], ssb[1])
       }
 
       if(srmode==0){
-        logN[y,1] <- rec_dev[y]  # AR(1) process
+        # Random walk with optional intercept
+        logN[y,1] <- rec_intercept + rec_dev[y]
       }
       if(srmode==1){
-        # Ricker: predicted recruitment + AR(1) deviation
+        # Ricker: predicted recruitment + AR(1) deviation + intercept
         predN <- rickerpar[1] + log(thisSSB) - exp(rickerpar[2])*thisSSB
-        logN[y,1] <- predN + rec_dev[y]
+        logN[y,1] <- predN + rec_intercept + rec_dev[y]
       }
       if(srmode==2){
-        # Beverton-Holt: predicted recruitment + AR(1) deviation
+        # Beverton-Holt: predicted recruitment + AR(1) deviation + intercept
         predN <- bhpar[1] + log(thisSSB) - log(1.0 + exp(bhpar[2])*thisSSB)
-        logN[y,1] <- predN + rec_dev[y]
+        logN[y,1] <- predN + rec_intercept + rec_dev[y]
       }
     }
   }
@@ -141,7 +143,7 @@ jnll <- function(par){
   # CENTERED PARAMETERIZATION
   if(ar1code == 0){
     # AR1 init conditions
-    jnll <- jnll - dnorm(logN[1,1], 0, sdR/sqrt(1-phi^2), log=TRUE)
+    jnll <- jnll - dnorm(logN[1,1], rec_intercept, sdR/sqrt(1-phi^2), log=TRUE)
 
     for(y in 2:nrow){
       thisSSB <- ifelse((y-minAge-1)>(-.5), ssbFUN(logN,logFF,M,SW,MO,PF,PM)[y-minAge],
@@ -157,7 +159,8 @@ jnll <- function(par){
         predN <- bhpar[1] + log(thisSSB) - log(1.0 + exp(bhpar[2])*thisSSB)
       }
 
-      jnll <- jnll - dnorm(logN[y,1], phi*predN, sdR, TRUE)
+      # Include intercept in the AR process
+      jnll <- jnll - dnorm(logN[y,1], rec_intercept + phi*(predN - rec_intercept), sdR, TRUE)
     }
   }
 
@@ -283,55 +286,104 @@ jnll <- function(par){
     ADREPORT(rec_dev)  # recruitment deviations
   }
   ADREPORT(logN[,1])  # report recruitment
-
+  ADREPORT(rec_intercept)  # report intercept
   jnll
 }
 
 ###################################################################################
-# test centered version
+# This was getting overwhelming, so adding this map function to map off things we don't estimate
+###################################################################################
+create_map_list <- function(est_rec_intercept = FALSE, ar1code = 0) {
+  map_list <- list(
+    logsdF = as.factor(rep(0, length(par$logsdF)))
+  )
+
+  # Map off rec_intercept if not estimated
+  if (!est_rec_intercept) {
+    map_list$rec_intercept <- as.factor(NA)
+  }
+
+  # For non-centered version, map off rec column of logN
+  if (ar1code == -1) {
+    nyr <- length(dat$year)
+    nage <- length(dat$age)
+    logN_map <- matrix(1:(nyr * nage), nyr, nage)
+    logN_map[,1] <- NA  # Map off recruitment
+    map_list$logN <- as.factor(logN_map)
+  }
+
+  return(map_list)
+}
+
+
+###################################################################################
+# Test centered version without intercept
 ###################################################################################
 dat$ar1code <- 0
+dat$est_rec_intercept <- FALSE
 par_centered <- par
-par_centered$z <- NULL  # Remove z for centered version
+par_centered$z <- NULL  # remove z for centered version
 
-obj_centered <- MakeADFun(jnll, par_centered,
-                          random=c("logN", "logF", "missing"),
-                          map=list(logsdF=as.factor(rep(0,length(par$logsdF)))),
-                          silent=TRUE)
+obj_centered_no_int <- MakeADFun(jnll, par_centered,
+                                 random=c("logN", "logF", "missing"),
+                                 map=create_map_list(est_rec_intercept = FALSE, ar1code = 0),
+                                 silent=TRUE)
 
-opt <- nlminb(obj_centered$par, obj_centered$fn, obj_centered$gr,
-              control=list(eval.max=1000, iter.max=1000))
-
-simtst <- obj_centered$simulate(par=obj_centered$env$last.par.best)
-
-sdr_centered <- sdreport(obj_centered)
-
+opt_centered_no_int <- nlminb(obj_centered_no_int$par, obj_centered_no_int$fn, obj_centered_no_int$gr,
+                              control=list(eval.max=1000, iter.max=1000))
+sdr_centered_no_int <- sdreport(obj_centered_no_int)
 ###################################################################################
-# Now test non-centered version
+# test centered version with intercept
+###################################################################################
+dat$est_rec_intercept <- TRUE
+
+obj_centered_int <- MakeADFun(jnll, par_centered,
+                              random=c("logN", "logF", "missing"),
+                              map=create_map_list(est_rec_intercept = TRUE, ar1code = 0),
+                              silent=TRUE)
+
+opt_centered_int <- nlminb(obj_centered_int$par, obj_centered_int$fn, obj_centered_int$gr,
+                           control=list(eval.max=1000, iter.max=1000))
+sdr_centered_int <- sdreport(obj_centered_int)
+###################################################################################
+# test non-centered version without intercept
 ###################################################################################
 dat$ar1code <- -1
-# For non-centered, don't estimate recruitment column of logN directly
-nyr <- length(dat$year)
-nage <- length(dat$age)
-logN_map <- matrix(1:(nyr * nage), nyr, nage)
-logN_map[,1] <- NA  # Map off recruitment
-logN_map <- as.factor(logN_map)
+dat$est_rec_intercept <- FALSE
 
-obj_noncentered <- MakeADFun(jnll, par,
-                             random=c("z", "logN", "logF", "missing"),
-                             map=list(logsdF=as.factor(rep(0,length(par$logsdF))),
-                                      logN=logN_map),
-                             silent=TRUE)
-opt <- nlminb(obj_noncentered$par, obj_noncentered$fn, obj_noncentered$gr,
-              control=list(eval.max=1000, iter.max=1000))
-sdr_noncentered <- sdreport(obj_noncentered)
+obj_noncentered_no_int <- MakeADFun(jnll, par,
+                                    random=c("z", "logN", "logF", "missing"),
+                                    map=create_map_list(est_rec_intercept = FALSE, ar1code = -1),
+                                    silent=TRUE)
+
+opt_noncentered_no_int <- nlminb(obj_noncentered_no_int$par, obj_noncentered_no_int$fn, obj_noncentered_no_int$gr,
+                                 control=list(eval.max=1000, iter.max=1000))
+sdr_noncentered_noint <- sdreport(obj_noncentered_no_int)
+###################################################################################
+# test non-centered version with intercept
+###################################################################################
+dat$est_rec_intercept <- TRUE
+
+obj_noncentered_int <- MakeADFun(jnll, par,
+                                 random=c("z", "logN", "logF", "missing"),
+                                 map=create_map_list(est_rec_intercept = TRUE, ar1code = -1),
+                                 silent=TRUE)
+
+opt_noncentered_int <- nlminb(obj_noncentered_int$par, obj_noncentered_int$fn, obj_noncentered_int$gr,
+                              control=list(eval.max=1000, iter.max=1000))
+sdr_noncentered_int <- sdreport(obj_noncentered_int)
 
 ###################################################################################
+# We have two pairs of results that are identical. Models with the intercept have the same
+# values, and models without the intercepts have the same values.
+#
 # Test that all fixed effects parameters are the same -- this includes phi
 ###################################################################################
-all((abs(sdr_centered$par.fixed - sdr_noncentered$par.fixed) < 0.001))
+all((abs(sdr_centered_int$par.fixed - sdr_noncentered_int$par.fixed) < 0.001))
+all((abs(diag(sdr_centered_int$cov.fixed) - diag(sdr_noncentered_int$cov.fixed)) < 0.001))
 
-all((abs(diag(sdr_centered$cov.fixed) - diag(sdr_noncentered$cov.fixed)) < 0.001))
+all((abs(sdr_centered_no_int$par.fixed - sdr_noncentered_noint$par.fixed) < 0.001))
+all((abs(diag(sdr_centered_no_int$cov.fixed) - diag(sdr_noncentered_noint$cov.fixed)) < 0.001))
 
 ###################################################################################
 # Test that all recruitment is the same
