@@ -1,6 +1,7 @@
 library(RTMB)
 # remotes::install_github("fishfollower/SAM/stockassessment")
 library(stockassessment)
+library(tictoc)
 #fit<-fitfromweb("NEA_sei_21_v5Reca")
 load("fit.RData")
 dat <- list()
@@ -40,6 +41,7 @@ dat$noParUS <- sapply(1:length(dat$fleetTypes),
 # AR type flag
 dat$ar1code <- -1  # 0 = centered, -1 = non-centered
 dat$est_rec_intercept <- FALSE # Flag to estimate recruitment intercept
+mulogobs <- dat$logobs
 
 # Parameter section
 par <- list()
@@ -316,6 +318,7 @@ create_map_list <- function(est_rec_intercept = FALSE, ar1code = 0) {
 }
 
 
+run_speed_test <- TRUE
 ###################################################################################
 # Test centered version without intercept
 ###################################################################################
@@ -332,6 +335,24 @@ obj_centered_no_int <- MakeADFun(jnll, par_centered,
 opt_centered_no_int <- nlminb(obj_centered_no_int$par, obj_centered_no_int$fn, obj_centered_no_int$gr,
                               control=list(eval.max=1000, iter.max=1000))
 sdr_centered_no_int <- sdreport(obj_centered_no_int)
+
+
+if(run_speed_test) { # 348.225
+  tic()
+  for(i in 1:25) {
+    set.seed(i)
+    dat$logobs <- mulogobs + rnorm(length(dat$logobs), 0, sd = 0.03)
+    obj_centered_no_int <- MakeADFun(jnll, par_centered,
+                                     random=c("logN", "logF", "missing"),
+                                     map=create_map_list(est_rec_intercept = FALSE, ar1code = 0),
+                                     silent=TRUE)
+    opt_centered_no_int <- nlminb(obj_centered_no_int$par, obj_centered_no_int$fn, obj_centered_no_int$gr,
+                                  control=list(eval.max=1000, iter.max=1000))
+  }
+  toc()
+}
+
+run_speed_test <- FALSE
 ###################################################################################
 # test centered version with intercept
 ###################################################################################
@@ -345,6 +366,23 @@ obj_centered_int <- MakeADFun(jnll, par_centered,
 opt_centered_int <- nlminb(obj_centered_int$par, obj_centered_int$fn, obj_centered_int$gr,
                            control=list(eval.max=1000, iter.max=1000))
 sdr_centered_int <- sdreport(obj_centered_int)
+
+
+if(run_speed_test) { # 312.867 sec
+  tic()
+  for(i in 1:25) {
+    set.seed(i)
+    dat$logobs <- mulogobs + rnorm(length(dat$logobs), 0, sd = 0.03)
+    obj_centered_int <- MakeADFun(jnll, par_centered,
+                                  random=c("logN", "logF", "missing"),
+                                  map=create_map_list(est_rec_intercept = TRUE, ar1code = 0),
+                                  silent=TRUE)
+
+    opt_centered_int <- nlminb(obj_centered_int$par, obj_centered_int$fn, obj_centered_int$gr,
+                               control=list(eval.max=1000, iter.max=1000))
+  }
+  toc()
+}
 ###################################################################################
 # test non-centered version without intercept
 ###################################################################################
@@ -359,6 +397,22 @@ obj_noncentered_no_int <- MakeADFun(jnll, par,
 opt_noncentered_no_int <- nlminb(obj_noncentered_no_int$par, obj_noncentered_no_int$fn, obj_noncentered_no_int$gr,
                                  control=list(eval.max=1000, iter.max=1000))
 sdr_noncentered_noint <- sdreport(obj_noncentered_no_int)
+
+if(run_speed_test) { # 167.642
+  tic()
+  for(i in 1:25) {
+    set.seed(i)
+    dat$logobs <- mulogobs + rnorm(length(dat$logobs), 0, sd = 0.03)
+    obj_noncentered_no_int <- MakeADFun(jnll, par,
+                                        random=c("z", "logN", "logF", "missing"),
+                                        map=create_map_list(est_rec_intercept = FALSE, ar1code = -1),
+                                        silent=TRUE)
+
+    opt_noncentered_no_int <- nlminb(obj_noncentered_no_int$par, obj_noncentered_no_int$fn, obj_noncentered_no_int$gr,
+                                     control=list(eval.max=1000, iter.max=1000))
+  }
+  toc()
+}
 ###################################################################################
 # test non-centered version with intercept
 ###################################################################################
@@ -373,6 +427,21 @@ opt_noncentered_int <- nlminb(obj_noncentered_int$par, obj_noncentered_int$fn, o
                               control=list(eval.max=1000, iter.max=1000))
 sdr_noncentered_int <- sdreport(obj_noncentered_int)
 
+if(run_speed_test) { # 192.298 sec
+  tic()
+  for(i in 1:25) {
+    set.seed(i)
+    dat$logobs <- mulogobs + rnorm(length(dat$logobs), 0, sd = 0.03)
+    obj_noncentered_int <- MakeADFun(jnll, par,
+                                     random=c("z", "logN", "logF", "missing"),
+                                     map=create_map_list(est_rec_intercept = TRUE, ar1code = -1),
+                                     silent=TRUE)
+
+    opt_noncentered_int <- nlminb(obj_noncentered_int$par, obj_noncentered_int$fn, obj_noncentered_int$gr,
+                                  control=list(eval.max=1000, iter.max=1000))
+  }
+  toc()
+}
 ###################################################################################
 # We have two pairs of results that are identical. Models with the intercept have the same
 # values, and models without the intercepts have the same values.
