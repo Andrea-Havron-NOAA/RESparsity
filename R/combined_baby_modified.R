@@ -71,7 +71,6 @@ itrans <- function(x){
 ssbFUN <- function(logN, logFF, M, SW, MO, PF, PM){
   nrow <- nrow(logN)
   ncol <- ncol(logN)
-
   ret <- numeric(nrow)
   for(y in 1:nrow){
     for(a in 1:ncol){
@@ -103,161 +102,104 @@ jnll <- function(par){
   logFF <- logF[,keyF+1] ## expand F
 
   ssb <- numeric(nrow)
-
-  ssb[1] <- ssbFUN(logN[1,,drop=FALSE],logFF[1,,drop=FALSE],
-                   M[1,,drop=FALSE],SW[1,,drop=FALSE],MO[1,,drop=FALSE],
-                   PF[1,,drop=FALSE],PM[1,,drop=FALSE])
+  ssb[1] <- ssbFUN(logN[1,,drop=FALSE],logFF[1,,drop=FALSE],M[1,,drop=FALSE],
+                   SW[1,,drop=FALSE],MO[1,,drop=FALSE],PF[1,,drop=FALSE],
+                   PM[1,,drop=FALSE])
 
   jnll <- 0
 
-  # Predicted + random deviations PARAMETERIZATION
+  # NON-CENTERED PARAMETERIZATION
   if(ar1code == -1){
-
-    # Do we need this penalty on the first Z? it is already constrained by
-    # the AR(1) process due to it's effect on later parameters? Thinking about
-    # this because of how it relates to Stock recruit relationship in the
-    # alternate formulation where you need a predicted N for the likelihood.
-    # Also N[1,1] is not updated with the dev so it doesn't really do anything?
-    jnll <- jnll - dnorm(z[1], 0, sdR/sqrt(1-phi^2), log=TRUE)
-
     # likelihood for standard normal innovations
+    jnll <- jnll - dnorm(z[1], 0, sqrt(sdR*sdR/(1-phi*phi)), log=TRUE)
     jnll <- jnll - sum(dnorm(z[-1], 0, sdR, log=TRUE))
+
     # transform innovations (z) to get recruitment deviations
     rec_dev <- numeric(nrow)
     rec_dev[1] <- z[1]  # initial condition
-
-    #Set N vectors
-    logpredR <- numeric(nrow)
-    logestR <- numeric(nrow*ncol)
-    logpredR[1] <- logN[1,1]
-    logestR[1] <- logN[1,1]
-
-    logpredN <- numeric(nrow*(ncol-1))
-    logestN <- numeric(nrow*(ncol-1))
-    logpredN[1:(ncol-1)] <- logN[1,-1]
-    logestN[1:(ncol-1)] <- logN[1,-1]
-    N_index <- ncol-1
-
+    logN[1,1] <- rec_intercept + rec_dev[1]
+    predN <- numeric((ncol-1)*(nrow-1))
+    estN <- numeric((ncol-1)*(nrow-1))
+    indN <- 0
+    # 3. Set recruitment as random walk + transformed deviations
     for(y in 2:nrow){
-      #Set recruitment deviations as transformed random walk
       rec_dev[y] <- phi * rec_dev[y-1] + z[y]
       if(srmode==0){
-        # Constant recruitment
-        logpredR[y] <- rec_intercept
+        # Random walk with optional intercept
+        predR <- rec_intercept
+        logN[y,1] <- predR + rec_dev[y]
       }else{
-        #Calculation SSB
-        #I think we need to calculate all N in this loop and run the SSB function
         thisSSB <- ifelse((y-minAge-1)>(-.5), ssb[y-minAge], ssb[1])
-
         if(srmode==1){
-          # Ricker predicted recruitment
-          logpredR[y] <- rickerpar[1] + log(thisSSB) - exp(rickerpar[2])*thisSSB
-        }else if(srmode==2){
-          # Beverton-Holt predicted recruitment
-          logpredR[y] <- bhpar[1] + log(thisSSB) - log(1.0 + exp(bhpar[2])*thisSSB)
+          # Ricker: predicted recruitment + AR(1) deviation + intercept
+          predR <- rickerpar[1] + log(thisSSB) - exp(rickerpar[2])*thisSSB
+          logN[y,1] <- predR + rec_dev[y]
+        }
+        if(srmode==2){
+          # Beverton-Holt: predicted recruitment + AR(1) deviation + intercept
+          predR <- bhpar[1] + log(thisSSB) - log(1.0 + exp(bhpar[2])*thisSSB)
+          logN[y,1] <- predR + rec_dev[y]
         }
       }
 
-      #Loop over all ages to update N's
+
       for(a in 2:ncol){
-        N_index <- N_index + 1
-
-        logpredN[N_index] <- logN[y-1,a-1] - exp(logFF[y-1,a-1]) - M[y-1,a-1]
+        indN <- indN + 1
+        predN[indN] <- logN[y-1,a-1] - exp(logFF[y-1,a-1]) - M[y-1,a-1]
         if(a==ncol){
-          logpredN[N_index] <- log(exp(logpredN[N_index]) + exp(logN[y-1,a] - exp(logFF[y-1,a]) - M[y-1,a]))
+          predN[indN] <- log(exp(predN[indN]) + exp(logN[y-1,a] - exp(logFF[y-1,a]) - M[y-1,a]))
         }
-        logestN[N_index] <- logN[y,a]
+        estN[indN] <- logN[y,a]
       }
-      #Calculate spawning biomass for the year ready for next year recruit
-      #prediction if using stock recruit relationship
-      ssb[y] <- ssbFUN(logN[y,,drop=FALSE], logFF[y,,drop=FALSE], M[y,,drop=FALSE],
-                       SW[y,,drop=FALSE], MO[y,,drop=FALSE], PF[y,,drop=FALSE],
+      ssb[y] <- ssbFUN(logN[y,,drop=FALSE],logFF[y,,drop=FALSE],M[y,,drop=FALSE],
+                       SW[y,,drop=FALSE],MO[y,,drop=FALSE],PF[y,,drop=FALSE],
                        PM[y,,drop=FALSE])
     }
-    #logN Predicted recruitment + AR(1) random walk deviation
-    #This makes the logN almost a MA(1) model X_(t) = u + phi*dev_(t-1) + z_(t)
-    logN[-1,1] <- logpredR[-1] + rec_dev[-1]
-
-    #Add likelihood for rest of ages
-    jnll <- jnll - sum(dnorm((logestN[-c(1:(ncol-1))]-logpredN[-c(1:(ncol-1))]),
-                         0,sdS, TRUE))
+    jnll <- jnll - sum(dnorm(estN, predN, sdS, TRUE))
   }
 
-  # Random prediction PARAMETERIZATION
+  # CENTERED PARAMETERIZATION
   if(ar1code == 0){
     # AR1 init conditions
-    #
-    #Set log N expected and predicted vectors
-    #Dimension folds n_ages and n_years - 1
-    #This assumes initial N is fixed or freely estimated
-    logpredR <- numeric(nrow)
-    logestR <- numeric(nrow*ncol)
-    logpredR[1] <- logN[1,1]
-    logestR[1] <- logN[1,1]
+    jnll <- jnll - dnorm(logN[1,1], rec_intercept, sdR/sqrt(1-phi^2), log=TRUE)
 
-    logpredN <- numeric(nrow*(ncol-1))
-    logestN <- numeric(nrow*(ncol-1))
-    logpredN[1:(ncol-1)] <- logN[1,-1]
-    logestN[1:(ncol-1)] <- logN[1,-1]
-
-    N_index <- ncol-1
-    #Loop over all years except the first to calculate estimated and predicted N
+    predN <- numeric((ncol-1)*(nrow-1))
+    estN <- numeric((ncol-1)*(nrow-1))
+    predR <- numeric((nrow-1))
+    indN <- 0
+    indR <- 0
     for(y in 2:nrow){
-      #Changed this to match other approach this is likely a very slow
-      #function call and shouldn't be different based on the parameterization
-
-      #I'm not clear how SSB can be calculated before the recruitment though
-      #I think all the N's should be calculated in side this loop so SSBFUN()
-      #Can be run at the start of each year. We need to have it consistent
-      #between appoaches though.
-
+      indR <- indR + 1
       if(srmode==0){
-        logpredR[y] <- logN[y-1,1]
+        predR[indR] <- rec_intercept
       }else{
-        #Calculation SSB
-        #I think we need to calculate all N in this loop and run the SSB function
         thisSSB <- ifelse((y-minAge-1)>(-.5), ssb[y-minAge], ssb[1])
-
         if(srmode==1){
-          # Ricker predicted recruitment
-          logpredR[y] <- rickerpar[1] + log(thisSSB) - exp(rickerpar[2])*thisSSB
-        }else if(srmode==2){
-          # Beverton-Holt predicted recruitment
-          logpredR[y] <- bhpar[1] + log(thisSSB) - log(1.0 + exp(bhpar[2])*thisSSB)
+          # Ricker: predicted recruitment + AR(1) deviation + intercept
+          predR[indR] <- rickerpar[1] + log(thisSSB) - exp(rickerpar[2])*thisSSB
+        }
+        if(srmode==2){
+          # Beverton-Holt: predicted recruitment + AR(1) deviation + intercept
+          predR[indR] <- bhpar[1] + log(thisSSB) - log(1.0 + exp(bhpar[2])*thisSSB)
         }
       }
-      logestR[y] <- logN[y,1]
 
-      #Loop over all ages to update N's
       for(a in 2:ncol){
-        N_index <- N_index + 1
-
-        logpredN[N_index] <- logN[y-1,a-1] - exp(logFF[y-1,a-1]) - M[y-1,a-1]
+        indN <- indN + 1
+        predN[indN] <- logN[y-1,a-1] - exp(logFF[y-1,a-1]) - M[y-1,a-1]
         if(a==ncol){
-          logpredN[N_index] <- log(exp(logpredN[N_index]) + exp(logN[y-1,a] - exp(logFF[y-1,a]) - M[y-1,a]))
+          predN[indN] <- log(exp(predN[indN]) + exp(logN[y-1,a] - exp(logFF[y-1,a]) - M[y-1,a]))
         }
-        logestN[N_index] <- logN[y,a]
+        estN[indN] <- logN[y,a]
       }
 
-      #Calculate spawning biomass for the year ready for next year recruit
-      #prediction if using stock recruit relationship
-      ssb[y] <- ssbFUN(logN[y,,drop=FALSE], logFF[y,,drop=FALSE],
-                       M[y,,drop=FALSE], SW[y,,drop=FALSE],
-                       MO[y,,drop=FALSE], PF[y,,drop=FALSE], PM[y,,drop=FALSE])
+      ssb[y] <- ssbFUN(logN[y,,drop=FALSE],logFF[y,,drop=FALSE],M[y,,drop=FALSE],
+                       SW[y,,drop=FALSE],MO[y,,drop=FALSE],PF[y,,drop=FALSE],
+                       PM[y,,drop=FALSE])
+
     }
-
-    #Not sure how the initial would be setup for the SR scenarios
-    #I think that the initial year should be excluded from the likelihood
-    #given that the point is to not estimate a mean. The logic being that
-    #rec_intercept is confounded with the first year dev anyway.
-    #jnll <- jnll - dnorm((logN[1,1]-rec_intercept), 0, sdR/sqrt(1-phi^2), log=TRUE)
-    # This is for all years but the initial.Should be much faster than the looped code before.
-
-    jnll <- jnll - sum(dnorm((logestN[-c(1:(ncol-1))]-logpredN[-c(1:(ncol-1))]),
-                         0,sdS, TRUE))
-    jnll <- jnll - sum(dnorm((logestR[-1]-logpredR[-1]),
-                         phi*(logestR[-nrow]-logpredN[-nrow]),
-                         sdR, TRUE))
+    jnll <- jnll - sum(dnorm(estN, predN, sdS, TRUE))
+    jnll <- jnll - sum(dnorm(logN[-1,1], predR + phi*(logN[-nrow,1] - predR), sdR, TRUE))
   }
 
   # F part
@@ -449,9 +391,9 @@ opt_centered_int <- nlminb(obj_centered_int$par, obj_centered_int$fn, obj_center
 sdr_centered_int <- sdreport(obj_centered_int)
 
 
-if(run_speed_test) { # 312.867 sec # NV 70.76
+if(run_speed_test) { # 312.867 sec # NV vec 18.66 (5 its no sdreport) # NV vec 21.72 (5 its with no sdreport)
   tic()
-  for(i in 1:25) {
+  for(i in 1:5) {
     set.seed(i)
     dat$logobs <- mulogobs + rnorm(length(dat$logobs), 0, sd = 0.03)
     obj_centered_int <- MakeADFun(jnll, par_centered,
@@ -461,6 +403,7 @@ if(run_speed_test) { # 312.867 sec # NV 70.76
 
     opt_centered_int <- nlminb(obj_centered_int$par, obj_centered_int$fn, obj_centered_int$gr,
                                control=list(eval.max=1000, iter.max=1000))
+    sdr_centered_int <- sdreport(obj_centered_int)
   }
   toc()
 }
@@ -508,9 +451,9 @@ opt_noncentered_int <- nlminb(obj_noncentered_int$par, obj_noncentered_int$fn, o
                               control=list(eval.max=1000, iter.max=1000))
 sdr_noncentered_int <- sdreport(obj_noncentered_int)
 
-if(run_speed_test) { # 192.298 sec
+if(run_speed_test) { # 192.298 sec # NV vec 44.75 (5 its no sdreport) # NV vec 51.78 (5 its with sdreport)
   tic()
-  for(i in 1:25) {
+  for(i in 1:5) {
     set.seed(i)
     dat$logobs <- mulogobs + rnorm(length(dat$logobs), 0, sd = 0.03)
     obj_noncentered_int <- MakeADFun(jnll, par,
@@ -520,6 +463,9 @@ if(run_speed_test) { # 192.298 sec
 
     opt_noncentered_int <- nlminb(obj_noncentered_int$par, obj_noncentered_int$fn, obj_noncentered_int$gr,
                                   control=list(eval.max=1000, iter.max=1000))
+
+    sdr_noncentered_int <- sdreport(obj_noncentered_int)
+
   }
   toc()
 }
