@@ -55,7 +55,7 @@ dat$noParUS <- sapply(1:length(dat$fleetTypes),
 
 ## Parameter section
 
-The parameters estimated in the RTMB code appear below; the parameters that matter most between implementations of the centered and non-centered recruitment deviations are the last 2 (`z` and `rec_intercept`). 
+The parameters estimated in the RTMB code appear below; the parameters that matter most between implementations of the centered and non-centered recruitment deviations are the last 2 (`z` and `rec_intercept`).
 
 ```{r parsection, echo=TRUE}
 # Parameter section
@@ -94,9 +94,7 @@ ssbFUN <- function(logN, logFF, M, SW, MO, PF, PM){
   ret <- numeric(nrow)
   for(y in 1:nrow){
     for(a in 1:ncol){
-      ret[y] = ret[y]+
-        SW[y,a]*MO[y,a]*exp(logN[y,a])*exp(-PF[y,a]*exp(logFF[y,a])-
-                                             PM[y,a]*M[y,a])
+      ret[y] = ret[y]+SW[y,a]*MO[y,a]*exp(logN[y,a])*exp(-PF[y,a]*exp(logFF[y,a])-PM[y,a]*M[y,a])
     }
   }
   return(ret);
@@ -116,58 +114,68 @@ jnll <- function(par){
   sdF <- exp(logsdF)
   sd <- exp(logsd)
 
-  phi <- 2*plogis(tPhi)-1 # AR(1) parameter
+  phi <- 2*plogis(tPhi)-1
 
   logobs <- logobs+numeric(1) ## hack to make advector
   logobs[is.na(logobs)] <- missing  ##patch missing
 
   logFF <- logF[,keyF+1] ## expand F
 
-
-  ssb <- ssbFUN(logN,logFF,M,SW,MO,PF,PM)
+  ssb <- numeric(nrow)
+  ssb[1] <- ssbFUN(logN[1,,drop=FALSE],logFF[1,,drop=FALSE],M[1,,drop=FALSE],
+                   SW[1,,drop=FALSE],MO[1,,drop=FALSE],PF[1,,drop=FALSE],
+                   PM[1,,drop=FALSE])
 
   jnll <- 0
 
   # NON-CENTERED PARAMETERIZATION
   if(ar1code == -1){
     # likelihood for standard normal innovations
-    jnll <- jnll - dnorm(z[1], 0, 
-                         sqrt(sdR*sdR/(1-phi*phi)), 
-                         log=TRUE)
-    jnll <- jnll - sum(dnorm(z[-1], 0, 
-                             sdR, 
-                             log=TRUE))
+    jnll <- jnll - dnorm(z[1], 0, sqrt(sdR*sdR/(1-phi*phi)), log=TRUE)
+    jnll <- jnll - sum(dnorm(z[-1], 0, sdR, log=TRUE))
 
     # transform innovations (z) to get recruitment deviations
     rec_dev <- numeric(nrow)
     rec_dev[1] <- z[1]  # initial condition
-    for(i in 2:nrow){
-      rec_dev[i] <- phi * rec_dev[i-1] + z[i]
-    }
-
-    # set recruitment as random walk + transformed deviations
-    for(y in 1:nrow){
-      if(y > 1) {
-        thisSSB <- ifelse((y-minAge-1)>(-.5), 
-                          ssb[y-minAge], 
-                          ssb[1])
-      }
-
+    logN[1,1] <- rec_intercept + rec_dev[1]
+    predN <- numeric((ncol-1)*(nrow-1))
+    estN <- numeric((ncol-1)*(nrow-1))
+    indN <- 0
+    # 3. Set recruitment as random walk + transformed deviations
+    for(y in 2:nrow){
+      rec_dev[y] <- phi * rec_dev[y-1] + z[y]
       if(srmode==0){
-        # random walk with optional intercept
-        logN[y,1] <- rec_intercept + rec_dev[y]
+        # Random walk with optional intercept
+        predR <- rec_intercept
+        logN[y,1] <- predR + rec_dev[y]
+      }else{
+        thisSSB <- ifelse((y-minAge-1)>(-.5), ssb[y-minAge], ssb[1])
+        if(srmode==1){
+          # Ricker: predicted recruitment + AR(1) deviation + intercept
+          predR <- rickerpar[1] + log(thisSSB) - exp(rickerpar[2])*thisSSB
+          logN[y,1] <- predR + rec_dev[y]
+        }
+        if(srmode==2){
+          # Beverton-Holt: predicted recruitment + AR(1) deviation + intercept
+          predR <- bhpar[1] + log(thisSSB) - log(1.0 + exp(bhpar[2])*thisSSB)
+          logN[y,1] <- predR + rec_dev[y]
+        }
       }
-      if(srmode==1){
-        # Ricker: predicted recruitment + AR(1) deviation + intercept
-        predN <- rickerpar[1] + log(thisSSB) - exp(rickerpar[2])*thisSSB
-        logN[y,1] <- predN + rec_intercept + rec_dev[y]
+
+
+      for(a in 2:ncol){
+        indN <- indN + 1
+        predN[indN] <- logN[y-1,a-1] - exp(logFF[y-1,a-1]) - M[y-1,a-1]
+        if(a==ncol){
+          predN[indN] <- log(exp(predN[indN]) + exp(logN[y-1,a] - exp(logFF[y-1,a]) - M[y-1,a]))
+        }
+        estN[indN] <- logN[y,a]
       }
-      if(srmode==2){
-        # Beverton-Holt: predicted recruitment + AR(1) deviation + intercept
-        predN <- bhpar[1] + log(thisSSB) - log(1.0 + exp(bhpar[2])*thisSSB)
-        logN[y,1] <- predN + rec_intercept + rec_dev[y]
-      }
+      ssb[y] <- ssbFUN(logN[y,,drop=FALSE],logFF[y,,drop=FALSE],M[y,,drop=FALSE],
+                       SW[y,,drop=FALSE],MO[y,,drop=FALSE],PF[y,,drop=FALSE],
+                       PM[y,,drop=FALSE])
     }
+    jnll <- jnll - sum(dnorm(estN, predN, sdS, TRUE))
   }
 
   # CENTERED PARAMETERIZATION
@@ -175,39 +183,43 @@ jnll <- function(par){
     # AR1 init conditions
     jnll <- jnll - dnorm(logN[1,1], rec_intercept, sdR/sqrt(1-phi^2), log=TRUE)
 
+    predN <- numeric((ncol-1)*(nrow-1))
+    estN <- numeric((ncol-1)*(nrow-1))
+    predR <- numeric((nrow-1))
+    indN <- 0
+    indR <- 0
     for(y in 2:nrow){
-      thisSSB <- ifelse((y-minAge-1)>(-.5), 
-                        ssbFUN(logN,logFF,M,SW,MO,PF,PM)[y-minAge],
-                        ssbFUN(logN,logFF,M,SW,MO,PF,PM)[1])
-
+      indR <- indR + 1
       if(srmode==0){
-        predN <- logN[y-1,1]
-      }
-      if(srmode==1){
-        predN <- rickerpar[1] + log(thisSSB) - exp(rickerpar[2])*thisSSB
-      }
-      if(srmode==2){
-        predN <- bhpar[1] + log(thisSSB) - log(1.0 + exp(bhpar[2])*thisSSB)
+        predR[indR] <- rec_intercept
+      }else{
+        thisSSB <- ifelse((y-minAge-1)>(-.5), ssb[y-minAge], ssb[1])
+        if(srmode==1){
+          # Ricker: predicted recruitment + AR(1) deviation + intercept
+          predR[indR] <- rickerpar[1] + log(thisSSB) - exp(rickerpar[2])*thisSSB
+        }
+        if(srmode==2){
+          # Beverton-Holt: predicted recruitment + AR(1) deviation + intercept
+          predR[indR] <- bhpar[1] + log(thisSSB) - log(1.0 + exp(bhpar[2])*thisSSB)
+        }
       }
 
-      # Include intercept in the AR process
-      jnll <- jnll - dnorm(logN[y,1], 
-                           rec_intercept + phi*(predN - rec_intercept), 
-                           sdR, TRUE)
+      for(a in 2:ncol){
+        indN <- indN + 1
+        predN[indN] <- logN[y-1,a-1] - exp(logFF[y-1,a-1]) - M[y-1,a-1]
+        if(a==ncol){
+          predN[indN] <- log(exp(predN[indN]) + exp(logN[y-1,a] - exp(logFF[y-1,a]) - M[y-1,a]))
+        }
+        estN[indN] <- logN[y,a]
+      }
+
+      ssb[y] <- ssbFUN(logN[y,,drop=FALSE],logFF[y,,drop=FALSE],M[y,,drop=FALSE],
+                       SW[y,,drop=FALSE],MO[y,,drop=FALSE],PF[y,,drop=FALSE],
+                       PM[y,,drop=FALSE])
+
     }
-  }
-
-  ssb <- ssbFUN(logN, logFF, M, SW, MO, PF, PM)
-
-  # Remaining N matrix
-  for(y in 2:nrow){
-    for(a in 2:ncol){
-      predN <- logN[y-1,a-1] - exp(logFF[y-1,a-1]) - M[y-1,a-1]
-      if(a==ncol){
-        predN <- log(exp(predN) + exp(logN[y-1,a] - exp(logFF[y-1,a]) - M[y-1,a]))
-      }
-      jnll <- jnll - dnorm(logN[y,a], predN, sdS, TRUE)
-    }
+    jnll <- jnll - sum(dnorm(estN, predN, sdS, TRUE))
+    jnll <- jnll - sum(dnorm(logN[-1,1], predR + phi*(logN[-nrow,1] - predR), sdR, TRUE))
   }
 
   # F part
@@ -326,7 +338,7 @@ jnll <- function(par){
 
 #### Mapping
 
-In addition to the recruitment intercept being turned on / off, the first column of `logN` is not needed for the non-centered model. 
+In addition to the recruitment intercept being turned on / off, the first column of `logN` is not needed for the non-centered model.
 
 ```{r}
 create_map_list <- function(est_rec_intercept = FALSE, ar1code = 0) {
@@ -359,7 +371,7 @@ create_map_list <- function(est_rec_intercept = FALSE, ar1code = 0) {
 
 ```{r model1, echo = TRUE}
 dat$ar1code <- 0
-n_iter <- 50
+n_iter <- 25
 dat$est_rec_intercept <- FALSE
 par_centered <- par
 par_centered$z <- NULL  # remove z for centered version
@@ -397,8 +409,9 @@ times <- 0
   
   time_centered_no_int <- mean(times)
   time_centered_no_int_sd <- sd(times)
+  time_centered_no_int_min <- min(times)
+  time_centered_no_int_max <- max(times)
 ```
-
 
 ### 2. Centered model without intercept
 
@@ -442,6 +455,8 @@ times[i] <- as.numeric(t2$toc - t2$tic)
   
   time_centered_int <- mean(times)
   time_centered_int_sd <- sd(times)
+    time_centered_int_min <- min(times)
+  time_centered_int_max <- max(times)
 ```
 
 ### 3. Non-centered version without intercept
@@ -482,6 +497,8 @@ times[i] <- as.numeric(t2$toc - t2$tic)
   
   time_noncentered_no_int <- mean(times)
   time_noncentered_no_int_sd <- sd(times)
+    time_noncentered_no_int_min <- min(times)
+  time_noncentered_no_int_max <- max(times)
 ```
 
 ### 4. Non-centered version with intercept
@@ -523,11 +540,13 @@ times[i] <- as.numeric(t2$toc - t2$tic)
   
   time_noncentered_int <- mean(times)
   time_noncentered_int_sd <- sd(times)
+    time_noncentered_int_min <- min(times)
+  time_noncentered_int_max <- max(times)
 ```
 
 ## Comparison
 
-For each group of models (with and without the fixed effect recruitment mean), we can compare models with the centered and non-centered parameterization. We compared (1) likelihoods, (2) fixed effect parameter means, (3) fixed effect parameter variances, and (4) estimated recruitment deviation mean and variances. For all comparisons, we found parameters to be perfectly correlated between the centered and non-centered parameterizations. 
+For each group of models (with and without the fixed effect recruitment mean), we can compare models with the centered and non-centered parameterization. We compared (1) likelihoods, (2) fixed effect parameter means, (3) fixed effect parameter variances, and (4) estimated recruitment deviation mean and variances. For all comparisons, we found parameters to be perfectly correlated between the centered and non-centered parameterizations.
 
 The only noticeable difference between these formulations appeared to be in the speed. From the base case we generated new datasets (n = `r n_iter`) to better understand whether the centered or non-centered parameterization was faster. We calculated the mean and standard deviation of computation time for each set of iterations (summarized in table below). This indicates that in general, the non-centered parameterizations are faster than the centered equivalents.
 
@@ -535,8 +554,8 @@ The only noticeable difference between these formulations appeared to be in the 
 m <- data.frame("Intercept" = c("Y","N","Y","N"),
                 "Model" = c("Centered", "Centered","Non-centered","Non-centered"),
                 "Avg. time (s)" = round(c(time_centered_no_int, time_centered_int, time_noncentered_no_int, time_noncentered_int), 3),
-                "SD" = round(c(time_centered_no_int_sd, time_centered_int_sd, time_noncentered_no_int_sd, time_noncentered_int_sd), 3))
+                "SD" = round(c(time_centered_no_int_sd, time_centered_int_sd, time_noncentered_no_int_sd, time_noncentered_int_sd), 3),
+                "Min" = round(c(time_centered_no_int_min, time_centered_int_min, time_noncentered_no_int_min, time_noncentered_int_min), 3),
+                "Max" = round(c(time_centered_no_int_max, time_centered_int_max, time_noncentered_no_int_max, time_noncentered_int_max), 3))
 knitr::kable(m)
 ```
-
-
