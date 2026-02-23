@@ -101,8 +101,10 @@ jnll <- function(par){
 
   logFF <- logF[,keyF+1] ## expand F
 
-
-  ssb <- ssbFUN(logN,logFF,M,SW,MO,PF,PM)
+  ssb <- numeric(nrow)
+  ssb[1] <- ssbFUN(logN[1,,drop=FALSE],logFF[1,,drop=FALSE],M[1,,drop=FALSE],
+                   SW[1,,drop=FALSE],MO[1,,drop=FALSE],PF[1,,drop=FALSE],
+                   PM[1,,drop=FALSE])
 
   jnll <- 0
 
@@ -115,31 +117,45 @@ jnll <- function(par){
     # transform innovations (z) to get recruitment deviations
     rec_dev <- numeric(nrow)
     rec_dev[1] <- z[1]  # initial condition
-    for(i in 2:nrow){
-      rec_dev[i] <- phi * rec_dev[i-1] + z[i]
-    }
-
+    logN[1,1] <- rec_intercept + rec_dev[1]
+    predN <- numeric((ncol-1)*(nrow-1))
+    estN <- numeric((ncol-1)*(nrow-1))
+    indN <- 0
     # 3. Set recruitment as random walk + transformed deviations
-    for(y in 1:nrow){
-      if(y > 1) {
-        thisSSB <- ifelse((y-minAge-1)>(-.5), ssb[y-minAge], ssb[1])
-      }
-
+    for(y in 2:nrow){
+      rec_dev[y] <- phi * rec_dev[y-1] + z[y]
       if(srmode==0){
         # Random walk with optional intercept
-        logN[y,1] <- rec_intercept + rec_dev[y]
+        predR <- rec_intercept
+        logN[y,1] <- predR + rec_dev[y]
+      }else{
+        thisSSB <- ifelse((y-minAge-1)>(-.5), ssb[y-minAge], ssb[1])
+        if(srmode==1){
+          # Ricker: predicted recruitment + AR(1) deviation + intercept
+          predR <- rickerpar[1] + log(thisSSB) - exp(rickerpar[2])*thisSSB
+          logN[y,1] <- predR + rec_dev[y]
+        }
+        if(srmode==2){
+          # Beverton-Holt: predicted recruitment + AR(1) deviation + intercept
+          predR <- bhpar[1] + log(thisSSB) - log(1.0 + exp(bhpar[2])*thisSSB)
+          logN[y,1] <- predR + rec_dev[y]
+        }
       }
-      if(srmode==1){
-        # Ricker: predicted recruitment + AR(1) deviation + intercept
-        predN <- rickerpar[1] + log(thisSSB) - exp(rickerpar[2])*thisSSB
-        logN[y,1] <- predN + rec_intercept + rec_dev[y]
+
+
+      for(a in 2:ncol){
+        indN <- indN + 1
+        predN[indN] <- logN[y-1,a-1] - exp(logFF[y-1,a-1]) - M[y-1,a-1]
+        if(a==ncol){
+          predN[indN] <- log(exp(predN[indN]) + exp(logN[y-1,a] - exp(logFF[y-1,a]) - M[y-1,a]))
+        }
+        estN[indN] <- logN[y,a]
       }
-      if(srmode==2){
-        # Beverton-Holt: predicted recruitment + AR(1) deviation + intercept
-        predN <- bhpar[1] + log(thisSSB) - log(1.0 + exp(bhpar[2])*thisSSB)
-        logN[y,1] <- predN + rec_intercept + rec_dev[y]
-      }
+      ssb[y] <- ssbFUN(logN[y,,drop=FALSE],logFF[y,,drop=FALSE],M[y,,drop=FALSE],
+                       SW[y,,drop=FALSE],MO[y,,drop=FALSE],PF[y,,drop=FALSE],
+                       PM[y,,drop=FALSE])
     }
+    jnll <- jnll - sum(dnorm(estN, predN, sdS, TRUE))
   }
 
   # CENTERED PARAMETERIZATION
@@ -147,36 +163,43 @@ jnll <- function(par){
     # AR1 init conditions
     jnll <- jnll - dnorm(logN[1,1], rec_intercept, sdR/sqrt(1-phi^2), log=TRUE)
 
+    predN <- numeric((ncol-1)*(nrow-1))
+    estN <- numeric((ncol-1)*(nrow-1))
+    predR <- numeric((nrow-1))
+    indN <- 0
+    indR <- 0
     for(y in 2:nrow){
-      thisSSB <- ifelse((y-minAge-1)>(-.5), ssbFUN(logN,logFF,M,SW,MO,PF,PM)[y-minAge],
-                        ssbFUN(logN,logFF,M,SW,MO,PF,PM)[1])
-
+      indR <- indR + 1
       if(srmode==0){
-        predN <- logN[y-1,1]
-      }
-      if(srmode==1){
-        predN <- rickerpar[1] + log(thisSSB) - exp(rickerpar[2])*thisSSB
-      }
-      if(srmode==2){
-        predN <- bhpar[1] + log(thisSSB) - log(1.0 + exp(bhpar[2])*thisSSB)
+        predR[indR] <- rec_intercept
+      }else{
+        thisSSB <- ifelse((y-minAge-1)>(-.5), ssb[y-minAge], ssb[1])
+        if(srmode==1){
+          # Ricker: predicted recruitment + AR(1) deviation + intercept
+          predR[indR] <- rickerpar[1] + log(thisSSB) - exp(rickerpar[2])*thisSSB
+        }
+        if(srmode==2){
+          # Beverton-Holt: predicted recruitment + AR(1) deviation + intercept
+          predR[indR] <- bhpar[1] + log(thisSSB) - log(1.0 + exp(bhpar[2])*thisSSB)
+        }
       }
 
-      # Include intercept in the AR process
-      jnll <- jnll - dnorm(logN[y,1], rec_intercept + phi*(predN - rec_intercept), sdR, TRUE)
+      for(a in 2:ncol){
+        indN <- indN + 1
+        predN[indN] <- logN[y-1,a-1] - exp(logFF[y-1,a-1]) - M[y-1,a-1]
+        if(a==ncol){
+          predN[indN] <- log(exp(predN[indN]) + exp(logN[y-1,a] - exp(logFF[y-1,a]) - M[y-1,a]))
+        }
+        estN[indN] <- logN[y,a]
+      }
+
+      ssb[y] <- ssbFUN(logN[y,,drop=FALSE],logFF[y,,drop=FALSE],M[y,,drop=FALSE],
+                       SW[y,,drop=FALSE],MO[y,,drop=FALSE],PF[y,,drop=FALSE],
+                       PM[y,,drop=FALSE])
+
     }
-  }
-
-  ssb <- ssbFUN(logN, logFF, M, SW, MO, PF, PM)
-
-  # Remaining N matrix
-  for(y in 2:nrow){
-    for(a in 2:ncol){
-      predN <- logN[y-1,a-1] - exp(logFF[y-1,a-1]) - M[y-1,a-1]
-      if(a==ncol){
-        predN <- log(exp(predN) + exp(logN[y-1,a] - exp(logFF[y-1,a]) - M[y-1,a]))
-      }
-      jnll <- jnll - dnorm(logN[y,a], predN, sdS, TRUE)
-    }
+    jnll <- jnll - sum(dnorm(estN, predN, sdS, TRUE))
+    jnll <- jnll - sum(dnorm(logN[-1,1], predR + phi*(logN[-nrow,1] - predR), sdR, TRUE))
   }
 
   # F part
@@ -337,7 +360,7 @@ opt_centered_no_int <- nlminb(obj_centered_no_int$par, obj_centered_no_int$fn, o
 sdr_centered_no_int <- sdreport(obj_centered_no_int)
 
 
-if(run_speed_test) { # 348.225
+if(run_speed_test) { # 348.225 # NV 67.09
   tic()
   for(i in 1:25) {
     set.seed(i)
@@ -368,9 +391,9 @@ opt_centered_int <- nlminb(obj_centered_int$par, obj_centered_int$fn, obj_center
 sdr_centered_int <- sdreport(obj_centered_int)
 
 
-if(run_speed_test) { # 312.867 sec
+if(run_speed_test) { # 312.867 sec # NV vec 18.66 (5 its no sdreport) # NV vec 21.72 (5 its with no sdreport)
   tic()
-  for(i in 1:25) {
+  for(i in 1:5) {
     set.seed(i)
     dat$logobs <- mulogobs + rnorm(length(dat$logobs), 0, sd = 0.03)
     obj_centered_int <- MakeADFun(jnll, par_centered,
@@ -380,6 +403,7 @@ if(run_speed_test) { # 312.867 sec
 
     opt_centered_int <- nlminb(obj_centered_int$par, obj_centered_int$fn, obj_centered_int$gr,
                                control=list(eval.max=1000, iter.max=1000))
+    sdr_centered_int <- sdreport(obj_centered_int)
   }
   toc()
 }
@@ -427,9 +451,9 @@ opt_noncentered_int <- nlminb(obj_noncentered_int$par, obj_noncentered_int$fn, o
                               control=list(eval.max=1000, iter.max=1000))
 sdr_noncentered_int <- sdreport(obj_noncentered_int)
 
-if(run_speed_test) { # 192.298 sec
+if(run_speed_test) { # 192.298 sec # NV vec 44.75 (5 its no sdreport) # NV vec 51.78 (5 its with sdreport)
   tic()
-  for(i in 1:25) {
+  for(i in 1:5) {
     set.seed(i)
     dat$logobs <- mulogobs + rnorm(length(dat$logobs), 0, sd = 0.03)
     obj_noncentered_int <- MakeADFun(jnll, par,
@@ -439,6 +463,9 @@ if(run_speed_test) { # 192.298 sec
 
     opt_noncentered_int <- nlminb(obj_noncentered_int$par, obj_noncentered_int$fn, obj_noncentered_int$gr,
                                   control=list(eval.max=1000, iter.max=1000))
+
+    sdr_noncentered_int <- sdreport(obj_noncentered_int)
+
   }
   toc()
 }
