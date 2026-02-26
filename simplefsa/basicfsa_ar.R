@@ -5,7 +5,7 @@ par <- list(
   logN1A=rep(0,ncol(dat$M)-1),
   logFY=rep(0,ncol(dat$M)),
   logFA=rep(0,nrow(dat$M)),
-  logSdCatch=0, 
+  logSdCatch=0,
   logQ=rep(0,length(unique(dat$age[dat$fleet==2]))),
   logSdSurvey=0,
   logSdR=0,
@@ -15,7 +15,7 @@ par <- list(
 
 nll<-function(par){
   getAll(par, dat)
-    
+
   na <- max(age)-min(age)+1
   ny <- max(year)-min(year)+1
 
@@ -25,13 +25,13 @@ nll<-function(par){
   ## setup N
   ans <- -dautoreg(c(logN1Y[1],logN1A), mu=logMuR, phi=2*plogis(tphiR)-1, scale=exp(logSdR), log=TRUE)
   logN <- matrix(0, nrow=na, ncol=ny)
-  logN[,1] <- logN1Y  
+  logN[,1] <- logN1Y
   for(y in 2:ny){
     logN[1,y] <- logN1A[y-1]
     for(a in 2:na){
       logN[a,y] <- logN[a-1,y-1]-F[a-1,y-1]-M[a-1,y-1]
     }
-  } 
+  }
 
   # Match to observations
   logObs <- log(obs)
@@ -46,12 +46,13 @@ nll<-function(par){
     }else{
       logPred[i] <- logQ[a]-(F[a,y]+M[a,y])*surveyTime+logN[a,y]
       sdvec[i] <- exp(logSdSurvey)
-    }    
+    }
   }
-  
+
   ans <- ans-sum(dnorm(logObs,logPred,sdvec,TRUE))
 
   logssb <- log(apply(exp(logN)*stockMeanWeight*propMature,2,sum))
+  REPORT(logssb)
   ADREPORT(logssb)
   return(ans)
 }
@@ -68,3 +69,55 @@ plot(yr, exp(pl$logssb), type="l", lwd=5, col="red", ylim=c(0,550000), xlab="Yea
 lines(yr, exp(pl$logssb-2*plsd$logssb), type="l", lwd=1, col="red")
 lines(yr, exp(pl$logssb+2*plsd$logssb), type="l", lwd=1, col="red")
 
+#################################################################
+# EW added this to do the Stan sampling
+remotes::install_github("kaskr/tmbstan/tmbstan")
+library(tmbstan)
+library(rstan)
+library(broom.mixed)
+library(ggplot2)
+library(gridExtra)
+
+# set up cores to sample in parallel
+#cores <- parallel::detectCores()-1
+#options(mc.cores = cores)
+# fit the model
+stan_fit <- tmbstan(obj, chains=4,
+                    iter=5000, # 2500 burn in
+                    control=list(adapt_delta=0.99))
+
+# diagnostics look pretty good
+pars <- summary(stan_fit)$summary
+which(pars[,"Rhat"] > 1.15)
+
+# extract tidied parameters for plotting
+tidied_pars <- tidy(stan_fit)
+
+post <- rstan::extract(stan_fit)
+
+df <- data.frame(
+  logSdSurvey = post$logSdSurvey,
+  logSdR      = post$logSdR,
+  tphiR       = post$tphiR,
+  logMuR      = post$logMuR
+)
+
+post <- rstan::extract(stan_fit)
+
+p1 <- ggplot(data.frame(x = post$logSdSurvey), aes(x)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 40) +
+  geom_density() + ggtitle("logSdSurvey")
+
+p2 <- ggplot(data.frame(x = post$logSdR), aes(x)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 40) +
+  geom_density() + ggtitle("logSdR")
+
+p3 <- ggplot(data.frame(x = post$tphiR), aes(x)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 40) +
+  geom_density() + ggtitle("tphiR")
+
+p4 <- ggplot(data.frame(x = post$logMuR), aes(x)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 40) +
+  geom_density() + ggtitle("logMuR")
+
+grid.arrange(p1, p2, p3, p4, ncol = 2)
