@@ -2,7 +2,7 @@ load("fsa.RData") # gets "dat"
 library(RTMB)
 par <- list(
   logN1Y=rep(0,nrow(dat$M)),
-  eps=rep(0,ncol(dat$M)),
+  z=rep(0,ncol(dat$M)),
   logFY=rep(0,ncol(dat$M)),
   logFA=rep(0,nrow(dat$M)),
   logSdCatch=0,
@@ -23,10 +23,10 @@ nll<-function(par){
   F <- exp(outer(logFA,logFY,"+"))
 
   ## setup N
-  #ans <- -sum(dnorm(z, 0, sd = 1, log = TRUE))
-  #eps <- exp(logSdR) * z
+  ans <- -sum(dnorm(z, 0, sd = 1, log = TRUE))
+  eps <- exp(logSdR) * z
 
-  ans <- -sum(dnorm(eps,0,sd=exp(logSdR), log=TRUE))
+  #ans <- -sum(dnorm(eps,0,sd=exp(logSdR), log=TRUE))
   logN1A <- numeric(length(eps)-1)
   theta <- 2*plogis(tthetaR)-1
   for(i in 1:length(logN1A)){
@@ -66,13 +66,9 @@ nll<-function(par){
   return(ans)
 }
 
-obj <- MakeADFun(nll, par, map=list(logFA=factor(c(1:4,NA,NA,NA))), silent=TRUE, random="eps")
+obj <- MakeADFun(nll, par, map=list(logFA=factor(c(1:4,NA,NA,NA))), silent=TRUE, random="z")
 
-#tic()
-#for(i in 1:100) {
 opt <- nlminb(obj$par, obj$fn, obj$gr, control=list(iter.max=1000,eval.max=1000))
-#}
-#toc()
 sdrep <- sdreport(obj)
 pl <- as.list(sdrep, "Est", report=TRUE)
 plsd <- as.list(sdrep, "Std", report=TRUE)
@@ -97,8 +93,8 @@ library(tictoc)
 #cores <- parallel::detectCores()-1
 #options(mc.cores = cores)
 # fit the model
-# original parameterization: 86.81 sec mean(pars[,"n_eff"]) 3854.551 ML estimation: 9.503 sec / 100 nlminb calls
-# z-parameterization 125.428 sec mean(pars[,"n_eff"]) 1248.449  ML estimation: 10.142 sec / 100 nlminb calls
+# original parameterization: 86.81 sec mean(pars[,"n_eff"]) 3854.551
+# z-parameterization 125.428 sec mean(pars[,"n_eff"]) 1248.449
 tic()
 stan_fit <- tmbstan(obj, chains=4,
                     iter=5000, # 2500 burn in
