@@ -1,5 +1,11 @@
 load("fsa.RData") # gets "dat"
 library(RTMB)
+library(tmbstan)
+library(rstan)
+library(broom.mixed)
+library(ggplot2)
+library(gridExtra)
+library(tictoc)
 par <- list(
   logN1Y=rep(0,nrow(dat$M)),
   logN1A=rep(0,ncol(dat$M)-1),
@@ -71,53 +77,55 @@ lines(yr, exp(pl$logssb+2*plsd$logssb), type="l", lwd=1, col="red")
 
 #################################################################
 # EW added this to do the Stan sampling
-remotes::install_github("kaskr/tmbstan/tmbstan")
-library(tmbstan)
-library(rstan)
-library(broom.mixed)
-library(ggplot2)
-library(gridExtra)
 
-# set up cores to sample in parallel
-#cores <- parallel::detectCores()-1
-#options(mc.cores = cores)
-# fit the model
-stan_fit <- tmbstan(obj, chains=4,
-                    iter=5000, # 2500 burn in
-                    control=list(adapt_delta=0.99))
+n_sim_iter <- 10
+set.seed(42)
+# preserve original data
+orig_dat <- dat
 
-# diagnostics look pretty good
-pars <- summary(stan_fit)$summary
-which(pars[,"Rhat"] > 1.15)
+sim_df <- data.frame(i = 1:n_sim_iter,
+                     max_cor = NA,
+                     mean_cor = NA,
+                     sampling_time = NA,
+                     pars_hi_rhat = NA,
+                     max_r_hat = NA,
+                     mean_n_eff = NA)
+for(i in 1:n_sim_iter) {
+  dat <- orig_dat
+  # jitter data a little
+  dat$obs * exp( rnorm(length(dat$obs), 0, 0.01) )
 
-# extract tidied parameters for plotting
-tidied_pars <- tidy(stan_fit)
+  # Create the objective function with 'z' as the random effect
+  obj <- MakeADFun(nll, par, map=list(logFA=factor(c(1:4,NA,NA,NA))), silent=TRUE, random="logN1A")
 
-post <- rstan::extract(stan_fit)
+  opt <- nlminb(obj$par, obj$fn, obj$gr, control=list(iter.max=1000,eval.max=1000))
+  sdrep <- sdreport(obj)
 
-df <- data.frame(
-  logSdSurvey = post$logSdSurvey,
-  logSdR      = post$logSdR,
-  tphiR       = post$tphiR,
-  logMuR      = post$logMuR
-)
+  pl    <- as.list(sdrep, "Est", report = TRUE)
+  plsd  <- as.list(sdrep, "Std", report = TRUE)
 
-post <- rstan::extract(stan_fit)
+  # fit the model
+  tic()
+  stan_fit <- tmbstan(obj, chains=4,
+                      iter=3000, # 2500 burn in
+                      control=list(adapt_delta=0.99))
+  tictoc <- toc()
 
-p1 <- ggplot(data.frame(x = post$logSdSurvey), aes(x)) +
-  geom_histogram(aes(y = after_stat(density)), bins = 40) +
-  geom_density() + ggtitle("logSdSurvey")
+  # diagnostics look pretty good
+  pars <- summary(stan_fit)$summary
+  pars_hi_rhat <- which(pars[,"Rhat"] > 1.15)
+  mean(pars[,"n_eff"])
 
-p2 <- ggplot(data.frame(x = post$logSdR), aes(x)) +
-  geom_histogram(aes(y = after_stat(density)), bins = 40) +
-  geom_density() + ggtitle("logSdR")
+  sim_df$pars_hi_rhat[i] <- length(pars_hi_rhat)
+  sim_df$max_r_hat[i] <- max(pars[,"Rhat"])
+  sim_df$sampling_time[i] <- as.numeric(tictoc$toc - tictoc$tic)
+  sim_df$mean_n_eff[i] <- mean(pars[,"n_eff"])
 
-p3 <- ggplot(data.frame(x = post$tphiR), aes(x)) +
-  geom_histogram(aes(y = after_stat(density)), bins = 40) +
-  geom_density() + ggtitle("tphiR")
+  pars <- rstan::extract(stan_fit, permuted = FALSE)
+  pars <- rbind(pars[,1,], pars[,2,], pars[,3,], pars[,4,])
+  cormat <- cor(pars)
+  sim_df$mean_cor[i] <- mean(cormat[upper.tri(cormat)])
+  sim_df$max_cor[i] <- max(cormat[upper.tri(cormat)])
 
-p4 <- ggplot(data.frame(x = post$logMuR), aes(x)) +
-  geom_histogram(aes(y = after_stat(density)), bins = 40) +
-  geom_density() + ggtitle("logMuR")
-
-grid.arrange(p1, p2, p3, p4, ncol = 2)
+}
+saveRDS(sim_df, "ar_results_sparse.rds")
