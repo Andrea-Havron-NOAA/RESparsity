@@ -171,4 +171,4 @@ for(i in 1:n_sim_iter) {
 sim_df$sampling <- "tmbstan"
 sim_df_stan$sampling <- "stan"
 
-saveRDS(rbind(sim_df$sampling, sim_df_stan$sampling), "ma_results_z.rds")
+saveRDS(rbind(sim_df, sim_df_stan), "ma_results_z.rds")
