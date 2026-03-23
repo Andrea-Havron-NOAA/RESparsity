@@ -1,0 +1,83 @@
+---
+title: "Untitled"
+output: word_document
+date: "2026-03-20"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Models
+
+Starting with Anders' FSA model, we built out 2 versions each of the MA(1) and AR(1) models.
+
+MA(1) models included
+
+(1) Modeling the deviations $eps \sim N(0, SdR)$ ("basicfsa_ma.R")
+
+(2) Modeling the deviations as $eps \sim N(0, 1)$ and scaling by SdR ("basicfsa_ma_z.R")
+
+AR(1) models included
+
+(1) Modeling the deviations as $\sim N(0, 1)$ and manually updating the values in a loop ("basicfsa_manual_ar.R")
+
+(2) Implementing the sparse matrix version ("basicfsa_sparse_ar.R")
+
+For each model, we generated 10 random datasets by corrupting the observations in Anders' initial data with additional lognormal observation error. We then did 2 types of MCMC sampling for each dataset:
+
+(1) Passing RTMB models to `tmbstan`
+
+(2) Fitting Models in Stan directly, skipping RTMB
+
+For each model, we summarized
+
+-   the maximum correlation across monitored parameters (`max_cor`)
+
+-   the mean correlation across monitored parameters (`mean_cor`)
+
+-   the time to run 4 MCMC chains with 3000 iterations (`sampling_time`, seconds)
+
+-   the number of parameters with an Rhat statistic \> 1.15 (`pars_hi_rhat`, lower values better)
+
+-   the maximum Rhat statistic (`max_r_hat`, lower values better)
+
+-   the mean effective parameters sampled (`mean_n_eff`, higher values better)
+
+## Results: MA models
+
+Results from the MA models show that sampling with `tmbstan` is 10x faster than using Stan directly, all parameters converge quickly, and more effective samples are taken. Comparing the regular implementation to Z-scored deviations, we find that approximately half of the Z-scored models fail to pass convergence tests; as speed and efficiency are similar, there seems to be limited advantages of Z-scoring when combined with `tmbstan`.
+
+## Results: MA(1) models with standard implementation
+
+```{r echo = FALSE}
+d <- readRDS("ma_results_basic.rds")
+names(d) <- c("i", "Max(cor)", "Mean(cor)", "Time", "N_hi_Rhat", "Max(Rhat)","N_eff", "Type")
+knitr::kable(d, digits = 2)
+
+```
+
+## Results: MA(1) models with Z-score implementation
+```{r echo = FALSE}
+d <- readRDS("ma_results_z.rds")
+names(d) <- c("i", "Max(cor)", "Mean(cor)", "Time", "N_hi_Rhat", "Max(Rhat)","N_eff", "Type")
+knitr::kable(d, digits = 2)
+
+```
+
+## Results: AR(1) models with manual implementation
+
+```{r echo = FALSE}
+d <- readRDS("ar_results_manual.rds")
+names(d) <- c("i", "Max(cor)", "Mean(cor)", "Time", "N_hi_Rhat", "Max(Rhat)","N_eff", "Type")
+knitr::kable(d, digits = 2)
+```
+
+## Results: AR(1) models with sparse implementation
+
+```{r echo = FALSE}
+d <- readRDS("ar_results_sparse.rds")
+names(d) <- c("i", "Max(cor)", "Mean(cor)", "Time", "N_hi_Rhat", "Max(Rhat)","N_eff")
+d$Type <- "tmbstan"
+knitr::kable(d, digits = 2)
+```

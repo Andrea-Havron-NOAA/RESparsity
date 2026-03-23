@@ -6,11 +6,10 @@ library(broom.mixed)
 library(ggplot2)
 library(gridExtra)
 library(tictoc)
-library(rstan)
 
 par <- list(
   logN1Y=rep(0,nrow(dat$M)),
-  eps=rep(0,ncol(dat$M)),
+  z=rep(0,ncol(dat$M)),
   logFY=rep(0,ncol(dat$M)),
   logFA=rep(0,nrow(dat$M)),
   logSdCatch=0,
@@ -31,10 +30,10 @@ nll<-function(par){
   F <- exp(outer(logFA,logFY,"+"))
 
   ## setup N
-  #ans <- -sum(dnorm(z, 0, sd = 1, log = TRUE))
-  #eps <- exp(logSdR) * z
+  ans <- -sum(dnorm(z, 0, sd = 1, log = TRUE))
+  eps <- exp(logSdR) * z
 
-  ans <- -sum(dnorm(eps,0,sd=exp(logSdR), log=TRUE))
+  #ans <- -sum(dnorm(eps,0,sd=exp(logSdR), log=TRUE))
   logN1A <- numeric(length(eps)-1)
   theta <- 2*plogis(tthetaR)-1
   for(i in 1:length(logN1A)){
@@ -74,29 +73,9 @@ nll<-function(par){
   return(ans)
 }
 
-obj <- MakeADFun(nll, par, map=list(logFA=factor(c(1:4,NA,NA,NA))), silent=TRUE, random="eps")
-
-#tic()
-#for(i in 1:100) {
-opt <- nlminb(obj$par, obj$fn, obj$gr, control=list(iter.max=1000,eval.max=1000))
-#}
-#toc()
-sdrep <- sdreport(obj)
-pl <- as.list(sdrep, "Est", report=TRUE)
-plsd <- as.list(sdrep, "Std", report=TRUE)
-
-yr<-sort(unique(dat$year))
-plot(yr, exp(pl$logssb), type="l", lwd=5, col="red", ylim=c(0,550000), xlab="Year", ylab="SSB")
-lines(yr, exp(pl$logssb-2*plsd$logssb), type="l", lwd=1, col="red")
-lines(yr, exp(pl$logssb+2*plsd$logssb), type="l", lwd=1, col="red")
-
-
-#################################################################
-# EW added this to do the Stan sampling
-#remotes::install_github("kaskr/tmbstan/tmbstan")
-
-na <- max(dat$age) - min(dat$age) + 1
-ny <- max(dat$year) - min(dat$year) + 1
+# Make data list for Stan
+na <- nrow(dat$M)
+ny <- ncol(dat$M)
 
 stan_data <- list(
   n_obs           = length(dat$obs),
@@ -134,7 +113,8 @@ for(i in 1:n_sim_iter) {
   dat$obs <- dat$obs * exp( rnorm(length(dat$obs), 0, 0.01) )
   stan_data$obs <- dat$obs
 
-  obj <- MakeADFun(nll, par, map=list(logFA=factor(c(1:4,NA,NA,NA))), silent=TRUE, random="eps")
+  obj <- MakeADFun(nll, par, map=list(logFA=factor(c(1:4,NA,NA,NA))), silent=TRUE, random="z")
+
   opt <- nlminb(obj$par, obj$fn, obj$gr, control=list(iter.max=1000,eval.max=1000))
   sdrep <- sdreport(obj)
 
@@ -164,7 +144,7 @@ for(i in 1:n_sim_iter) {
   # fit the fully bayesian model
   tic()
   fit <- stan(
-    file = "stan_ma_basic.stan",
+    file = "stan_ma_z.stan",
     data = stan_data,
     chains = 4,
     iter = 3000,
@@ -187,7 +167,8 @@ for(i in 1:n_sim_iter) {
   sim_df_stan$max_cor[i] <- max(cormat[upper.tri(cormat)])
 
 }
+
 sim_df$sampling <- "tmbstan"
 sim_df_stan$sampling <- "stan"
 
-saveRDS(rbind(sim_df, sim_df_stan), "ma_results_basic.rds")
+saveRDS(rbind(sim_df, sim_df_stan), "ma_results_z.rds")
