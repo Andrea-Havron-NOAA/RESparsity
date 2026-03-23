@@ -34,23 +34,24 @@ nll <- function(par) {
   phi <- 2 * plogis(tphiR) - 1
   sdR <- exp(logSdR)
 
+  init_z <- (logN1Y[1] - logMuR)/sdR
   # 1. Penalize innovations (z ~ N(0,1))
-  ans <- -sum(dnorm(z, 0, 1, log = TRUE))
+  ans <- -sum(dnorm(c(init_z, z), 0, 1, log = TRUE))
 
   # 2. Build the recruitment deviations manually
   # Stationary variance for the first recruitment year
-  rec_dev <- numeric(ny - 1)
-  rec_dev[1] <- z[1] * (sdR / sqrt(1 - phi^2))
+  rec_dev <- numeric(ny)
+  rec_dev[1] <- (logN1Y[1] - logMuR)
 
-  for(i in 2:(ny - 1)) {
-    rec_dev[i] <- phi * rec_dev[i-1] + z[i] * sdR
+  for(i in 2:(ny)) {
+    rec_dev[i] <- phi * rec_dev[i-1] + z[i-1] * sdR
   }
 
   # 3. Map to logN matrix
   logN <- matrix(0, nrow = na, ncol = ny)
   logN[, 1] <- logN1Y
   for(y in 2:ny) {
-    logN[1, y] <- logMuR + rec_dev[y - 1] # Derived recruitment
+    logN[1, y] <- logMuR + rec_dev[y] # Derived recruitment
     for(a in 2:na) {
       logN[a, y] <- logN[a - 1, y - 1] - F[a - 1, y - 1] - M[a - 1, y - 1]
     }
