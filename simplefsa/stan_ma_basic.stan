@@ -18,7 +18,7 @@ data {
 
 parameters {
   vector[na] logN1Y;
-  vector[ny] eps_std;    // Standardized innovations (z-scores)
+  vector[ny] eps_std;
   vector[ny] logFY;
   vector[na] logFA;
   real logSdCatch;
@@ -36,26 +36,25 @@ transformed parameters {
   real theta = 2 * inv_logit(tthetaR) - 1;
   real sdR = exp(logSdR);
 
-  // 1. Non-centered innovations
+  //Non-centered innovations
   eps = eps_std * sdR;
 
-  // 2. Setup Fishing Mortality
+  //Fishing Mortality
   for (y in 1:ny) {
     for (a in 1:na) {
       F[a, y] = exp(logFA[a] + logFY[y]);
     }
   }
 
-  // 3. Population Dynamics with MA(1) Recruitment
+  //Population Dynamics with MA(1) Recruitment
   // Initial Year (Age-structure in year 1)
   for (a in 1:na) logN[a, 1] = logN1Y[a];
 
   for (y in 2:ny) {
     // Recruitment (Age 1) follows: logMuR + eps[y] + theta * eps[y-1]
-    // Note: your RTMB loop used eps[i+1] + theta*eps[i], which shifts indices
+    // RTMB loop used eps[i+1] + theta*eps[i]
     logN[1, y] = logMuR + eps[y] + theta * eps[y - 1];
 
-    // Cohort survival
     for (a in 2:na) {
       logN[a, y] = logN[a - 1, y - 1] - F[a - 1, y - 1] - M[a - 1, y - 1];
     }

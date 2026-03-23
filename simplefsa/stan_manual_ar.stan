@@ -18,7 +18,7 @@ data {
 
 parameters {
   vector[na] logN1Y;
-  vector[ny-1] logN1A; // Actually logN for age 1 in years 2:ny
+  vector[ny-1] logN1A;
   vector[ny] logFY;
   vector[na] logFA;
   real logSdCatch;
@@ -27,7 +27,7 @@ parameters {
   real logSdR;
   real tphiR;
   real logMuR;
-  vector[ny - 1] z; // Recruitment innovations
+  vector[ny - 1] z;
 }
 
 transformed parameters {
@@ -37,27 +37,26 @@ transformed parameters {
   real phi = 2 * inv_logit(tphiR) - 1;
   real sdR = exp(logSdR);
 
-  // 1. Setup Fishing Mortality (Separable)
+  // Setup Fishing Mortality
   for (y in 1:ny) {
     for (a in 1:na) {
       F[a, y] = exp(logFA[a] + logFY[y]);
     }
   }
 
-  // 2. Recruitment AR1 Process (Non-centered)
+  // Recruitment AR1 Process (Non-centered)
   rec_dev[1] = z[1] * (sdR / sqrt(1 - phi^2));
   for (y in 2:(ny - 1)) {
     rec_dev[y] = phi * rec_dev[y - 1] + z[y] * sdR;
   }
 
-  // 3. Population Dynamics Matrix
+  // Population Dynamics Matrix
   // Initial Year
   for (a in 1:na) logN[a, 1] = logN1Y[a];
 
   for (y in 2:ny) {
     // Recruitment (Age 1)
     logN[1, y] = logMuR + rec_dev[y - 1];
-    // Cohort survival
     for (a in 2:na) {
       logN[a, y] = logN[a - 1, y - 1] - F[a - 1, y - 1] - M[a - 1, y - 1];
     }

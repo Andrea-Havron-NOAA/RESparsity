@@ -18,7 +18,7 @@ data {
 
 parameters {
   vector[na] logN1Y;
-  vector[ny] z;          // Standard normal innovations
+  vector[ny] z;
   vector[ny] logFY;
   vector[na] logFA;
   real logSdCatch;
@@ -38,8 +38,7 @@ transformed parameters {
 
   // Non-centered transformation: eps = z * sigma
   eps = z * sdR;
-
-  // Setup Fishing Mortality (Separable)
+  // Setup Fishing Mortality
   for (y in 1:ny) {
     for (a in 1:na) {
       F[a, y] = exp(logFA[a] + logFY[y]);
