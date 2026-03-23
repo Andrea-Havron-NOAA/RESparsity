@@ -2,7 +2,7 @@ load("fsa.RData") # gets "dat"
 library(RTMB)
 par <- list(
   logN1Y=rep(0,nrow(dat$M)),
-  logN1A=rep(0,ncol(dat$M)-1),
+  x=rep(0,ncol(dat$M)-1),
   logFY=rep(0,ncol(dat$M)),
   logFA=rep(0,nrow(dat$M)),
   logSdCatch=0, 
@@ -23,7 +23,18 @@ nll<-function(par){
   F <- exp(outer(logFA,logFY,"+"))
 
   ## setup N
-  ans <- -dautoreg(c(logN1Y[1],logN1A), mu=logMuR, phi=2*plogis(tphiR)-1, scale=exp(logSdR), log=TRUE)
+
+ 
+  ans<-0
+  logN1A<-numeric(length(x))
+  sdAR<-exp(logSdR)
+  phiAR<-2*plogis(tphiR)-1
+  ans <- ans -sum(dnorm(x,0,1,log=TRUE))
+  logN1A[1]<- phiAR*logN1Y[1]+logMuR*(1-phiAR)+sdAR*x[1]
+  for(i in 2:length(logN1A)){    
+    logN1A[i] <- phiAR*logN1A[i-1]+logMuR*(1-phiAR)+sdAR*x[i] 
+  }
+  
   logN <- matrix(0, nrow=na, ncol=ny)
   logN[,1] <- logN1Y  
   for(y in 2:ny){
@@ -56,7 +67,7 @@ nll<-function(par){
   return(ans)
 }
 
-obj <- MakeADFun(nll, par, map=list(logFA=factor(c(1:4,NA,NA,NA))), silent=TRUE, random="logN1A")
+obj <- MakeADFun(nll, par, map=list(logFA=factor(c(1:4,NA,NA,NA))), silent=TRUE, random="x")
 
 opt <- nlminb(obj$par, obj$fn, obj$gr, control=list(iter.max=1000,eval.max=1000))
 sdrep <- sdreport(obj)
@@ -70,3 +81,4 @@ plsd <- as.list(sdrep, "Std", report=TRUE)
 #lines(yr, exp(pl$logssb+2*plsd$logssb), type="l", lwd=1, col="red")
 
 Matrix:::image(obj$env$spHess()) 
+
