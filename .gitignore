@@ -55,3 +55,4 @@ rsconnect/
 *.js
 *.woff
 *.css
+.DS_Store
