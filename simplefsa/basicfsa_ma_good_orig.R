@@ -2,14 +2,14 @@ load("fsa.RData") # gets "dat"
 library(RTMB)
 par <- list(
   logN1Y=rep(0,nrow(dat$M)),
-  logN1A=rep(0,ncol(dat$M)-1),
+  eps=rep(0,ncol(dat$M)),
   logFY=rep(0,ncol(dat$M)),
   logFA=rep(0,nrow(dat$M)),
   logSdCatch=0, 
   logQ=rep(0,length(unique(dat$age[dat$fleet==2]))),
   logSdSurvey=0,
   logSdR=0,
-  tphiR=0,
+  tthetaR=0,
   logMuR=0
 )
 
@@ -23,7 +23,13 @@ nll<-function(par){
   F <- exp(outer(logFA,logFY,"+"))
 
   ## setup N
-  ans <- -dautoreg(c(logN1Y[1],logN1A), mu=logMuR, phi=2*plogis(tphiR)-1, scale=exp(logSdR), log=TRUE)
+  ans <- -sum(dnorm(eps,0,sd=exp(logSdR), log=TRUE))
+  logN1A <- numeric(length(eps)-1)
+  theta <- 2*plogis(tthetaR)-1
+  for(i in 1:length(logN1A)){
+    logN1A[i] <- logMuR+eps[i+1]+theta*eps[i]      
+  }                  
+  
   logN <- matrix(0, nrow=na, ncol=ny)
   logN[,1] <- logN1Y  
   for(y in 2:ny){
@@ -50,27 +56,24 @@ nll<-function(par){
     }    
   }
   
-  ans <- ans-sum(dnorm(logObs,logPred,sdvec,TRUE))
+  ans <- ans -sum(dnorm(logObs,logPred,sdvec,TRUE))
 
   logssb <- log(apply(exp(logN)*stockMeanWeight*propMature,2,sum))
   ADREPORT(logssb)
   return(ans)
 }
 
-obj <- MakeADFun(nll, par, map=list(logFA=factor(c(1:4,NA,NA,NA))), silent=TRUE, random="logN1A")
+obj <- MakeADFun(nll, par, map=list(logFA=factor(c(1:4,NA,NA,NA))), silent=TRUE, random="eps")
 
 opt <- nlminb(obj$par, obj$fn, obj$gr, control=list(iter.max=1000,eval.max=1000))
 sdrep <- sdreport(obj)
 pl <- as.list(sdrep, "Est", report=TRUE)
 plsd <- as.list(sdrep, "Std", report=TRUE)
 
-
-#yr<-sort(unique(dat$year))
-#plot(yr, exp(pl$logssb), type="l", lwd=5, col="red", ylim=c(0,550000), xlab="Year", ylab="SSB")
-#lines(yr, exp(pl$logssb-2*plsd$logssb), type="l", lwd=1, col="red")
-#lines(yr, exp(pl$logssb+2*plsd$logssb), type="l", lwd=1, col="red")
-
-Matrix:::image(obj$env$spHess()) 
+yr<-sort(unique(dat$year))
+plot(yr, exp(pl$logssb), type="l", lwd=5, col="red", ylim=c(0,550000), xlab="Year", ylab="SSB")
+lines(yr, exp(pl$logssb-2*plsd$logssb), type="l", lwd=1, col="red")
+lines(yr, exp(pl$logssb+2*plsd$logssb), type="l", lwd=1, col="red")
 
 set.seed(123)
 
@@ -83,7 +86,7 @@ doone<-function(){
     sdat$obs <- objcon$simulate()$obs
     sdat
 }
-simAR <- list()
-for(i in 1:100)simAR[[length(simAR)+1]] <- doone()
+simMA <- list()
+for(i in 1:100)simMA[[length(simMA)+1]] <- doone()
 
-save(simAR, file="simAR.RData")
+save(simMA, file="simMA.RData")
