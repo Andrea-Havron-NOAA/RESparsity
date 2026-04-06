@@ -280,7 +280,9 @@ stan_data <- list(
 # check_nll_equivalence_ma(fit_check, obj, i = 50,  j = 200)
 
 ## ---- Full tmbstan vs Stan comparison ---------------------
-n_sim_iter <- 10
+load("simplefsa/simMA.RData")
+
+n_sim_iter <- 100
 iter_mcmc <- 4000
 adapt_delta <- 0.99
 n_chains <- 4
@@ -292,9 +294,28 @@ sim_df <- data.frame()
 sim_df_stan <- data.frame()
 
 for (i in 1:n_sim_iter) {
-  dat <- orig_dat
-  dat$obs <- dat$obs * exp(rnorm(length(dat$obs), 0, 0.01))
-  stan_data$obs <- dat$obs
+  dat <- simMA[[i]]
+  # dat <- orig_dat
+  # dat$obs <- dat$obs * exp(rnorm(length(dat$obs), 0, 0.01))
+  # stan_data$obs <- dat$obs
+
+  stan_data <- list(
+    n_obs           = length(dat$obs),
+    obs             = dat$obs,
+    age             = as.integer(dat$age),
+    year            = as.integer(dat$year),
+    fleet           = as.integer(dat$fleet),
+    na              = na_dat,
+    ny              = ny_dat,
+    n_logFA_free    = n_logFA_free,
+    n_survey_ages   = n_survey_ages,
+    min_age         = min(dat$age),
+    min_year        = min(dat$year),
+    M               = dat$M,
+    stockMeanWeight = dat$stockMeanWeight,
+    propMature      = dat$propMature,
+    surveyTime      = dat$surveyTime
+  )
 
   ## TMB obj with jittered data
   obj <- MakeADFun(nll, par,
