@@ -2,7 +2,7 @@ load("fsa.RData") # gets "dat"
 library(RTMB)
 par <- list(
   logN1Y=rep(0,nrow(dat$M)),
-  eps=rep(0,ncol(dat$M)),
+  logN1A=rep(0,ncol(dat$M)),
   logFY=rep(0,ncol(dat$M)),
   logFA=rep(0,nrow(dat$M)),
   logSdCatch=0, 
@@ -23,17 +23,18 @@ nll<-function(par){
   F <- exp(outer(logFA,logFY,"+"))
 
   ## setup N
-  ans <- -sum(dnorm(eps,0,sd=exp(logSdR), log=TRUE))
-  logN1A <- numeric(length(eps)-1)
-  theta <- 2*plogis(tthetaR)-1
-  for(i in 1:length(logN1A)){
-    logN1A[i] <- logMuR+eps[i+1]+theta*eps[i]      
-  }                  
+  theta <- 2*plogis(tthetaR)-1  
+  eps <- numeric(length(logN1A)) 
+  eps[1] <- logN1A[1] 
+  for (i in 2:(length(logN1A))){
+    eps[i] <- logN1A[i] - theta*eps[i-1]
+  }
+  ans <- -sum(dnorm(eps, 0, exp(logSdR), log = TRUE))
   
   logN <- matrix(0, nrow=na, ncol=ny)
   logN[,1] <- logN1Y  
   for(y in 2:ny){
-    logN[1,y] <- logN1A[y-1]
+    logN[1,y] <- logN1A[y]+logMuR
     for(a in 2:na){
       logN[a,y] <- logN[a-1,y-1]-F[a-1,y-1]-M[a-1,y-1]
     }
@@ -63,7 +64,7 @@ nll<-function(par){
   return(ans)
 }
 
-obj <- MakeADFun(nll, par, map=list(logFA=factor(c(1:4,NA,NA,NA))), silent=TRUE, random="eps")
+obj <- MakeADFun(nll, par, map=list(logFA=factor(c(1:4,NA,NA,NA))), silent=TRUE, random="logN1A")
 
 opt <- nlminb(obj$par, obj$fn, obj$gr, control=list(iter.max=1000,eval.max=1000))
 sdrep <- sdreport(obj)
