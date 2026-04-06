@@ -72,18 +72,18 @@ plsd <- as.list(sdrep, "Std", report=TRUE)
 
 Matrix:::image(obj$env$spHess()) 
 
-set.seed(123)
-
-sdr <- sdreport(obj)
-pl <- as.list(sdr, "Est") 
-# sim study full conditional
-doone<-function(){
-    sdat <- dat
-    objcon <- MakeADFun(nll,pl, silent=TRUE)
-    sdat$obs <- objcon$simulate()$obs
-    sdat
-}
-simAR <- list()
-for(i in 1:100)simAR[[length(simAR)+1]] <- doone()
-
-save(simAR, file="simAR.RData")
+#set.seed(123)
+#
+#sdr <- sdreport(obj)
+#pl <- as.list(sdr, "Est") 
+# # sim study full conditional
+#doone<-function(){
+#    sdat <- dat
+#    objcon <- MakeADFun(nll,pl, silent=TRUE)
+#    sdat$obs <- objcon$simulate()$obs
+#    sdat
+#}
+#simAR <- list()
+#for(i in 1:100)simAR[[length(simAR)+1]] <- doone()
+#
+#save(simAR, file="simAR.RData")

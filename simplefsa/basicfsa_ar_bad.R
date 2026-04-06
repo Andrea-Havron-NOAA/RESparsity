@@ -30,9 +30,10 @@ nll<-function(par){
   sdAR<-exp(logSdR)
   phiAR<-2*plogis(tphiR)-1
   ans <- ans -sum(dnorm(x,0,1,log=TRUE))
-  logN1A[1]<- phiAR*logN1Y[1]+logMuR*(1-phiAR)+sdAR*x[1]
+  ans <- ans-dnorm(logN1Y[1],logMuR, sdAR, log=TRUE)
+  logN1A[1]<- phiAR*logN1Y[1]+logMuR*(1-phiAR)+sdAR*sqrt(1-phiAR^2)*x[1]
   for(i in 2:length(logN1A)){    
-    logN1A[i] <- phiAR*logN1A[i-1]+logMuR*(1-phiAR)+sdAR*x[i] 
+    logN1A[i] <- phiAR*logN1A[i-1]+logMuR*(1-phiAR)+sdAR*sqrt(1-phiAR^2)*x[i] 
   }
   
   logN <- matrix(0, nrow=na, ncol=ny)
