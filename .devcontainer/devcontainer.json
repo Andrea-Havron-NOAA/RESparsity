@@ -1,0 +1,26 @@
+// For format details, see https://aka.ms/devcontainer.json.
+{
+	"name": "RESparsity R",
+	"image": "ghcr.io/rocker-org/devcontainer/r-ver:4.3",
+	"features": {
+		"ghcr.io/rocker-org/devcontainer-features/apt-packages:1": {
+			"packages": "make,gcc,g++"
+		},
+		 "ghcr.io/rocker-org/devcontainer-features/r-packages:1": {
+			"packages": "RTMB,ggplot2,gridExtra,tictoc,microbenchmark",
+			 "installSystemRequirements": true
+		  }
+	},
+	"postCreateCommand": "echo 'options(repos = c(CRAN = \"https://cloud.r-project.org\"))' | sudo tee -a \"$(R RHOME)/etc/Rprofile.site\"'",
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"reditorsupport.r",
+				"ms-vscode.cpptools"
+			],
+			"settings": {
+				"r.session.emulateRStudioAPI": false
+			}
+		}
+	}
+}

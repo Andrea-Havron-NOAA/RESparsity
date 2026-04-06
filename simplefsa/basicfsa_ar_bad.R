@@ -1,6 +1,6 @@
-load("fsa.RData") # gets "dat"
+load("simplefsa/fsa.RData") # gets "dat"
 library(RTMB)
-par <- list(
+par_manual <- list(
   logN1Y=rep(0,nrow(dat$M)),
   x=rep(0,ncol(dat$M)-1),
   logFY=rep(0,ncol(dat$M)),
@@ -13,7 +13,7 @@ par <- list(
   logMuR=0
 )
 
-nll<-function(par){
+nll_manual<-function(par){
   getAll(par, dat)
     
   na <- max(age)-min(age)+1
@@ -68,7 +68,7 @@ nll<-function(par){
   return(ans)
 }
 
-obj <- MakeADFun(nll, par, map=list(logFA=factor(c(1:4,NA,NA,NA))), silent=TRUE, random="x")
+obj <- MakeADFun(nll_manual, par_manual, map=list(logFA=factor(c(1:4,NA,NA,NA))), silent=TRUE, random="x")
 
 opt <- nlminb(obj$par, obj$fn, obj$gr, control=list(iter.max=1000,eval.max=1000))
 sdrep <- sdreport(obj)
