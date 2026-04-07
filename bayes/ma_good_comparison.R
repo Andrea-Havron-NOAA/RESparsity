@@ -322,4 +322,4 @@ for (i in 1:n_sim_iter) {
   results <- rbind(results, row_tmbmle, row_tmb, row_stan)
 }
 
-saveRDS(results, "ma_good_results.rds")
+saveRDS(results, "bayes/ma_good_results.rds")

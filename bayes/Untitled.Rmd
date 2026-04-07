@@ -5,8 +5,10 @@ date: "`r format(Sys.Date(), '%B %d, %Y')`"
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE,
-                      fig.width = 7, fig.height = 5)
+knitr::opts_chunk$set(
+  echo = FALSE, warning = FALSE, message = FALSE,
+  fig.width = 7, fig.height = 5
+)
 library(ggplot2)
 library(gridExtra)
 library(dplyr)
@@ -85,7 +87,7 @@ For each model $\times$ implementation combination we summarised across the 100 
 ## Load result files and standardize column names
 load_results <- function(path, model_label) {
   d <- readRDS(path)
-  
+
   if ("sampling" %in% names(d)) {
     names(d)[names(d) == "sampling"] <- "Type"
   }
@@ -108,14 +110,15 @@ load_results <- function(path, model_label) {
   d
 }
 
-ma_centered    <- load_results("ma_centered_results.rds",    "MA(1) centred")
+ma_centered <- load_results("ma_centered_results.rds", "MA(1) centred")
 ma_noncentered <- load_results("ma_noncentered_results.rds", "MA(1) non-centred")
-ar1            <- load_results("ar1_results.rds",            "AR(1)")
+ar1 <- load_results("ar1_results.rds", "AR(1)")
 
 all_results <- bind_rows(ma_centered, ma_noncentered, ar1)
-all_results$Type  <- factor(all_results$method,  levels = c("tmbstan", "stan"))
+all_results$Type <- factor(all_results$method, levels = c("tmbstan", "stan"))
 all_results$model <- factor(all_results$model,
-                            levels = c("MA(1) centred", "MA(1) non-centred", "AR(1)"))
+  levels = c("MA(1) centred", "MA(1) non-centred", "AR(1)")
+)
 ```
 
 ```{r summary-fn}
@@ -127,11 +130,13 @@ fmt_mean_sd <- function(x) {
 
 make_summary_table <- function(df) {
   metrics <- c("sampling_time", "max_r_hat", "mean_n_eff", "pars_hi_rhat")
-  labels  <- c("Sampling time (s)", "Max Rhat", "Mean ESS",
-               "N pars Rhat > 1.15")
+  labels <- c(
+    "Sampling time (s)", "Max Rhat", "Mean ESS",
+    "N pars Rhat > 1.15"
+  )
 
   types <- unique(as.character(df$method))
-  out   <- data.frame(Metric = labels)
+  out <- data.frame(Metric = labels)
 
   for (tp in types) {
     sub <- df[df$method == tp, ]
@@ -148,14 +153,18 @@ make_summary_table <- function(df) {
 
 ```{r table-ma-basic, results='asis'}
 tab <- make_summary_table(ma_centered)
-kable(tab, caption = "Table 1. MA(1) centred implementation. Mean (SD) across 100 replicates.",
-      align = c("l", "r", "r"))
+kable(tab,
+  caption = "Table 1. MA(1) centred implementation. Mean (SD) across 100 replicates.",
+  align = c("l", "r", "r")
+)
 ```
 
 ```{r table-ma-z, results='asis'}
 tab <- make_summary_table(ma_noncentered)
-kable(tab, caption = "Table 2. MA(1) non-centred implementation. Mean (SD) across 100 replicates.",
-      align = c("l", "r", "r"))
+kable(tab,
+  caption = "Table 2. MA(1) non-centred implementation. Mean (SD) across 100 replicates.",
+  align = c("l", "r", "r")
+)
 ```
 
 ### AR(1) models
@@ -164,8 +173,10 @@ Results for the AR(1) model are presented in Table 3.
 
 ```{r table-ar-manual, results='asis'}
 tab <- make_summary_table(ar1)
-kable(tab, caption = "Table 3. AR(1) implementation. Mean (SD) across 100 replicates.",
-      align = c("l", "r", "r"))
+kable(tab,
+  caption = "Table 3. AR(1) implementation. Mean (SD) across 100 replicates.",
+  align = c("l", "r", "r")
+)
 ```
 
 ### Results

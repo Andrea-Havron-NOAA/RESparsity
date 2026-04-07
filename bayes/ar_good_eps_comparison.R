@@ -42,44 +42,46 @@ nll <- function(par) {
   ## logN1Y[1] ~ N(logMuR, sdAR) matching dautoreg first-element convention
   ## logN1A computed deterministically from AR recursion
   phiAR <- 2 * plogis(tphiR) - 1
-  sdAR  <- exp(logSdR)
+  sdAR <- exp(logSdR)
 
   ## Priors
   ans <- -dnorm(logN1Y[1], logMuR, sdAR, log = TRUE)
   ans <- ans - sum(dnorm(eps, 0, sdAR * sqrt(1 - phiAR^2), log = TRUE))
   ## Priors on log-SD pars -- must match Stan
-  ans <- ans - dnorm(logSdCatch,  0, 1, log = TRUE)
+  ans <- ans - dnorm(logSdCatch, 0, 1, log = TRUE)
   ans <- ans - dnorm(logSdSurvey, 0, 1, log = TRUE)
-  ans <- ans - dnorm(logSdR,      0, 1, log = TRUE)
+  ans <- ans - dnorm(logSdR, 0, 1, log = TRUE)
 
   ## AR(1) recursion: logN1A deterministic given eps
-  logN1A    <- numeric(ny - 1)
+  logN1A <- numeric(ny - 1)
   logN1A[1] <- phiAR * logN1Y[1] + logMuR * (1 - phiAR) + eps[1]
-  for (i in 2:(ny - 1))
+  for (i in 2:(ny - 1)) {
     logN1A[i] <- phiAR * logN1A[i - 1] + logMuR * (1 - phiAR) + eps[i]
+  }
 
-  logN      <- matrix(0, nrow = na, ncol = ny)
+  logN <- matrix(0, nrow = na, ncol = ny)
   logN[, 1] <- logN1Y
   for (y in 2:ny) {
     logN[1, y] <- logN1A[y - 1]
-    for (a in 2:na)
+    for (a in 2:na) {
       logN[a, y] <- logN[a - 1, y - 1] - F[a - 1, y - 1] - M[a - 1, y - 1]
+    }
   }
 
-  obs     <- OBS(obs)
-  logObs  <- log(obs)
+  obs <- OBS(obs)
+  logObs <- log(obs)
   logPred <- numeric(length(logObs))
-  sdvec   <- numeric(length(logObs))
+  sdvec <- numeric(length(logObs))
   for (i in 1:length(logObs)) {
-    a <- age[i]  - min(age)  + 1
+    a <- age[i] - min(age) + 1
     y <- year[i] - min(year) + 1
     if (fleet[i] == 1) {
       logPred[i] <- log(F[a, y]) - log(F[a, y] + M[a, y]) +
-                    log(1 - exp(-F[a, y] - M[a, y])) + logN[a, y]
-      sdvec[i]   <- exp(logSdCatch)
+        log(1 - exp(-F[a, y] - M[a, y])) + logN[a, y]
+      sdvec[i] <- exp(logSdCatch)
     } else {
       logPred[i] <- logQ[a] - (F[a, y] + M[a, y]) * surveyTime + logN[a, y]
-      sdvec[i]   <- exp(logSdSurvey)
+      sdvec[i] <- exp(logSdSurvey)
     }
   }
   ans <- ans - sum(dnorm(logObs, logPred, sdvec, log = TRUE))
@@ -91,11 +93,13 @@ nll <- function(par) {
 
 ## ---- Build TMB object ------------------------------------
 obj <- MakeADFun(nll, par,
-                 map    = list(logFA = factor(c(1:4, NA, NA, NA))),
-                 silent = TRUE,
-                 random = "eps")
-opt   <- nlminb(obj$par, obj$fn, obj$gr,
-                control = list(iter.max = 1000, eval.max = 1000))
+  map    = list(logFA = factor(c(1:4, NA, NA, NA))),
+  silent = TRUE,
+  random = "eps"
+)
+opt <- nlminb(obj$par, obj$fn, obj$gr,
+  control = list(iter.max = 1000, eval.max = 1000)
+)
 sdrep <- sdreport(obj)
 
 ## ---- Stan model ------------------------------------------
@@ -103,9 +107,9 @@ sdrep <- sdreport(obj)
 ## dautoreg(c(logN1Y[1], logN1A), mu, phi, scale) evaluates:
 ##   logN1Y[1] ~ N(mu, scale)                          [plain normal, NOT stationary]
 ##   logN1A[i] ~ N(phi*prev + mu*(1-phi), scale*sqrt(1-phi^2))  for i=1..(ny-1)
-na_dat        <- max(dat$age)  - min(dat$age)  + 1
-ny_dat        <- max(dat$year) - min(dat$year) + 1
-n_logFA_free  <- 4
+na_dat <- max(dat$age) - min(dat$age) + 1
+ny_dat <- max(dat$year) - min(dat$year) + 1
+n_logFA_free <- 4
 n_survey_ages <- length(unique(dat$age[dat$fleet == 2]))
 survey_age_positions <- sort(unique(dat$age[dat$fleet == 2])) - min(dat$age) + 1
 
@@ -254,18 +258,17 @@ stan_data <- list(
 # check_nll(fit_check, obj, i = 50,  j = 200)
 
 ## ---- Comparison loop -------------------------------------
-n_sim_iter  <- 100
-iter_hmc    <- 4000
+n_sim_iter <- 100
+iter_hmc <- 4000
 adapt_delta <- 0.99
-n_chains    <- 4
+n_chains <- 4
 set.seed(1234)
 
 load("simplefsa/simAR.RData")
 
-results  <- data.frame()
+results <- data.frame()
 
 for (i in 1:n_sim_iter) {
-
   dat <- simAR[[i]]
 
   stan_data <- list(
@@ -287,27 +290,33 @@ for (i in 1:n_sim_iter) {
   )
 
   obj <- MakeADFun(nll, par,
-                   map = list(logFA = factor(c(1:4, NA, NA, NA))),
-                   silent = TRUE, random = "eps")
+    map = list(logFA = factor(c(1:4, NA, NA, NA))),
+    silent = TRUE, random = "eps"
+  )
 
   tic()
   opt <- nlminb(obj$par, obj$fn, obj$gr,
-                control = list(iter.max = 1000, eval.max = 1000))
+    control = list(iter.max = 1000, eval.max = 1000)
+  )
   mle_tmb <- toc(quiet = TRUE)
 
   tic()
-  fit_tmb <- tmbstan(obj, chains = n_chains, cores = 1, iter = iter_hmc,
-                     control = list(adapt_delta = adapt_delta),
-                     init = "last.par.best")
+  fit_tmb <- tmbstan(obj,
+    chains = n_chains, cores = 1, iter = iter_hmc,
+    control = list(adapt_delta = adapt_delta),
+    init = "last.par.best"
+  )
   tt_tmb <- toc(quiet = TRUE)
-  p_tmb  <- summary(fit_tmb)$summary
+  p_tmb <- summary(fit_tmb)$summary
 
   tic()
-  fit_stan <- sampling(stan_mod, data = stan_data, chains = n_chains,
-                       cores = n_chains, iter = iter_hmc,
-                       control = list(adapt_delta = adapt_delta), refresh = 0)
+  fit_stan <- sampling(stan_mod,
+    data = stan_data, chains = n_chains,
+    cores = n_chains, iter = iter_hmc,
+    control = list(adapt_delta = adapt_delta), refresh = 0
+  )
   tt_stan <- toc(quiet = TRUE)
-  p_stan  <- summary(fit_stan)$summary
+  p_stan <- summary(fit_stan)$summary
 
   row_tmbmle <- data.frame(
     i = i, method = "tmb",
@@ -318,20 +327,24 @@ for (i in 1:n_sim_iter) {
     min_neff = NA
   )
 
-  row_tmb <- data.frame(i = i, method = "tmbstan",
-    time_s       = as.numeric(tt_tmb$toc - tt_tmb$tic),
-    max_rhat     = max(p_tmb[, "Rhat"],  na.rm = TRUE),
+  row_tmb <- data.frame(
+    i = i, method = "tmbstan",
+    time_s = as.numeric(tt_tmb$toc - tt_tmb$tic),
+    max_rhat = max(p_tmb[, "Rhat"], na.rm = TRUE),
     pars_hi_rhat = sum(p_tmb[, "Rhat"] > 1.05, na.rm = TRUE),
-    mean_neff    = mean(p_tmb[, "n_eff"], na.rm = TRUE),
-    min_neff     = min(p_tmb[, "n_eff"],  na.rm = TRUE))
-  row_stan <- data.frame(i = i, method = "stan",
-    time_s       = as.numeric(tt_stan$toc - tt_stan$tic),
-    max_rhat     = max(p_stan[, "Rhat"],  na.rm = TRUE),
+    mean_neff = mean(p_tmb[, "n_eff"], na.rm = TRUE),
+    min_neff = min(p_tmb[, "n_eff"], na.rm = TRUE)
+  )
+  row_stan <- data.frame(
+    i = i, method = "stan",
+    time_s = as.numeric(tt_stan$toc - tt_stan$tic),
+    max_rhat = max(p_stan[, "Rhat"], na.rm = TRUE),
     pars_hi_rhat = sum(p_stan[, "Rhat"] > 1.05, na.rm = TRUE),
-    mean_neff    = mean(p_stan[, "n_eff"], na.rm = TRUE),
-    min_neff     = min(p_stan[, "n_eff"],  na.rm = TRUE))
+    mean_neff = mean(p_stan[, "n_eff"], na.rm = TRUE),
+    min_neff = min(p_stan[, "n_eff"], na.rm = TRUE)
+  )
 
   results <- rbind(results, row_tmbmle, row_tmb, row_stan)
 }
 
-saveRDS(results, "ar_good_eps_results.rds")
+saveRDS(results, "bayes/ar_good_eps_results.rds")
