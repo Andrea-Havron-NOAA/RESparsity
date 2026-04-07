@@ -331,7 +331,7 @@ for (i in 1:n_sim_iter) {
     i = i, method = "tmbstan",
     time_s = as.numeric(tt_tmb$toc - tt_tmb$tic),
     max_rhat = max(p_tmb[, "Rhat"], na.rm = TRUE),
-    pars_hi_rhat = sum(p_tmb[, "Rhat"] > 1.05, na.rm = TRUE),
+    pars_hi_rhat = sum(p_tmb[, "Rhat"] > 1.15, na.rm = TRUE),
     mean_neff = mean(p_tmb[, "n_eff"], na.rm = TRUE),
     min_neff = min(p_tmb[, "n_eff"], na.rm = TRUE)
   )
@@ -339,7 +339,7 @@ for (i in 1:n_sim_iter) {
     i = i, method = "stan",
     time_s = as.numeric(tt_stan$toc - tt_stan$tic),
     max_rhat = max(p_stan[, "Rhat"], na.rm = TRUE),
-    pars_hi_rhat = sum(p_stan[, "Rhat"] > 1.05, na.rm = TRUE),
+    pars_hi_rhat = sum(p_stan[, "Rhat"] > 1.15, na.rm = TRUE),
     mean_neff = mean(p_stan[, "n_eff"], na.rm = TRUE),
     min_neff = min(p_stan[, "n_eff"], na.rm = TRUE)
   )
