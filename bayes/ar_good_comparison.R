@@ -260,6 +260,24 @@ load("simplefsa/simAR.RData")
 for (i in 1:n_sim_iter) {
   dat <- simAR[[i]]
 
+  stan_data <- list(
+    n_obs = length(dat$obs),
+    obs = dat$obs,
+    age = as.integer(dat$age),
+    year = as.integer(dat$year),
+    fleet = as.integer(dat$fleet),
+    na = na_dat,
+    ny = ny_dat,
+    n_logFA_free = n_logFA_free,
+    n_survey_ages = n_survey_ages,
+    min_age = min(dat$age),
+    min_year = min(dat$year),
+    M = dat$M,
+    stockMeanWeight = dat$stockMeanWeight,
+    propMature = dat$propMature,
+    surveyTime = dat$surveyTime
+  )
+
   obj <- MakeADFun(nll, par,
     map = list(logFA = factor(c(1:4, NA, NA, NA))),
     silent = TRUE, random = "logN1A"
