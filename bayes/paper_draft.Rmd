@@ -1,0 +1,321 @@
+---
+title: 'Model comparison summary'
+author: ''
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output:
+  bookdown::html_document2:
+    toc: true
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE, warning = FALSE, message = FALSE,
+  fig.width = 7, fig.height = 5
+)
+library(ggplot2)
+library(gridExtra)
+library(dplyr)
+library(tidyr)
+library(knitr)
+```
+
+## Abstract
+
+## Introduction
+
+Key points:
+
+-   Lots of variable implementations of random effects for recruitment -
+    deviations vs recruitment, often chosen for convenience
+
+-   Unclear whether ML results will translate to Bayesian estimation
+
+    -   lots of history in comparing centered vs non-centered REs
+
+    -   best practices in creating sparsity pretty well understood in
+        TMB, less clear what this means for MCMC
+
+Gap / objective - tools such as tmbstan now allow TMB/RTMB models to be
+passed directly to Stan
+
+-   meaningful comparisons require verifying that the RTMB and Stan
+    implementations encode the same posterior
+
+-   we systematically compare sampling efficiency, convergence, and
+    effective sample size across five combinations of MA(1) and AR(1)
+    recruitment models, using both RTMB-tmbstan and Stan
+    1. Is treating recruitment deviations or recruitment more efficient?
+    2. What is the impact of RTMB's dautoreg function?
+
+-   other?
+
+## Methods
+
+### Simulation models
+
+We used an age-structured model based on the `simplefsa` fisheries
+dataset [more detail from Anders]. The model tracks log-numbers-at-age
+($\log N_{a,y}$) over age classes $a = 1, \ldots, A$ and years
+$y = 1, \ldots, T$. Fishing mortality is modeled as a separable age-year
+product $F_{a,y} = \exp(\log F_a + \log F_y)$. The population is
+propagated forward by
+
+$$\log N_{a,y} = \log N_{a-1,y-1} - F_{a-1,y-1} - M_{a-1,y-1}$$
+
+where $M_{a,y}$ is natural mortality supplied as data. Observations
+consist of commercial catch-at-age (fleet 1) and survey indices (fleet
+2, ages 1–5), both modeled with lognormal observation error.
+
+We implemented two formulations of recruitment dynamics, not in the same
+model. First, we modeled annual recruitment deviations $\varepsilon_y$
+as a first-order moving-average process (MA(1)),
+
+$$\log N_{1,y} = \mu_R + \varepsilon_y + \theta \varepsilon_{y-1}, \quad \varepsilon_y \sim N(0, \sigma_R)$$
+
+where $\theta = 2\,\text{logit}^{-1}(\tilde\theta_R) - 1$.
+
+Our second formulation simulated annual recruitment as a first order
+autoregressive process,
+
+$$\log N_{1,y} = \phi \log N_{1,y-1} + \mu_R(1 - \phi) + \sigma_R z_y, \quad z_y \sim N(0,1)$$
+where the AR parameter $\phi = 2\,\text{logit}^{-1}(\tilde\phi_R) - 1$.
+
+### Estimation
+
+We compared five model implementations across the two recruitment
+dynamics formulations (MA(1) and AR(1)), varying in the choice of random
+effect and the resulting Hessian sparsity structure (Table \@ref(tab:table1)). For the
+MA(1) models, we compared treating the innovations $\varepsilon_y$ or
+recruitment $\log N_{1,y}$ directly as the random effect. When
+innovations $\varepsilon_y$ are a random effect, $\log N_{1,y}$ is
+computed deterministically MA(1) process, yielding a sparse banded
+Hessian because each $\varepsilon_y$ connects only to its immediate
+neighbors. In our second MA(1) estimation model with $\log N_{1,y}$ as
+random effects, the $\varepsilon_y$ become derived quantities, with a
+dense Hessian because each $\log N_{1,y}$ propagates through all future
+time steps. [cite Kristensen 2016? Rue and Held?, other?]
+
+For the AR(1) models, we implemented three estimation model variants.
+RTMB includes a `dautoreg` function, which uses the banded precision
+matrix of the AR(1) process for sparse Hessian evaluation. Our first
+estimation approach treated the $\log N_{1,y}$ as random effects, and
+utilized the `dautoreg` approach. To isolate the effect of this
+function, our second approach involved an identical model, but we
+replaced `dautoreg` with a loop, resulting in a dense Hessian from the
+same statistical model. Parallel to our MA(1) comparison, we were also
+interested in effects of treating the deviations as random effects; our
+third estimation model treated the AR(1) deviations
+$\varepsilon_y \sim N(0,\, \sigma_R\sqrt{1-\phi^2})$ as random effects,
+with $\log N_{1,y}$ as derived quantities, also yielding a sparse
+Hessian. Collectively these implementations allow us to disentangle the
+effects of random effect choice and Hessian sparsity on sampling
+efficiency.
+
+We performed estimation using maximum likelihood and Bayesian approaches
+(MCMC). Models were coded in RTMB (cite), and fitted model objects were
+then passed directly to Stan via the `tmbstan` package (cite Monahan et
+al.). For comparison purposes, we then re-coded estimation models
+directly in Stan, and re-estimated parameters. Both MCMC approaches used
+4 chains, with 4000 iterations each (retaining the last 2000). We
+specified the target acceptance probability of the NUTS sampler to be
+0.99 (`adapt_delta`). For Bayesian estimation (and RTMB equivalence),
+all standard deviation parameters were given $N(0,1)$ priors on the log
+scale, and all other parameters were given Stan's default flat priors.
+
+```{r table1, echo=FALSE}
+model_table <- data.frame(
+  Model      = c("MA",
+                          "MA",
+                          "AR",
+                          "AR",
+                          "AR"),
+  `Random effect`     = c("$\\varepsilon$",
+                          "$\\log N_{1,y}$",
+                          "$\\log N_{1,y}$ (dautoreg)",
+                          "$\\log N_{1,y}$ (loop)",
+                          "$\\varepsilon$"),
+  Hessian             = c("Sparse", "Dense", "Sparse", "Dense", "Sparse"),
+  check.names = FALSE
+)
+
+knitr::kable(model_table,
+             caption = "Summary of model implementations.",
+             align   = c("l", "l", "c"),
+             escape  = FALSE)
+```
+
+### Summary statistics
+
+For each combination of estimation model and implementation (RTMB, tmbstan, Stan) we summarized across the 100 replicates: mean sampling time
+(seconds), mean and maximum $\hat{R}$, mean effective sample size (ESS),
+and the number of parameters with $\hat{R} > 1.15$. Results are
+presented as mean (SD) across replicates.
+
+## Results
+
+```{r load-data}
+## Load result files and standardize column names
+load_results <- function(path, model_label) {
+  d <- readRDS(path)
+
+  if ("sampling" %in% names(d)) {
+    names(d)[names(d) == "sampling"] <- "Type"
+  }
+  col_map <- c(
+    sampling_time = "sampling_time",
+    pars_hi_rhat  = "pars_hi_rhat",
+    max_r_hat     = "max_r_hat",
+    mean_n_eff    = "mean_n_eff",
+    time_s        = "sampling_time",
+    max_rhat      = "max_r_hat",
+    mean_neff     = "mean_n_eff",
+    min_neff      = "min_n_eff"
+  )
+  for (old in names(col_map)) {
+    if (old %in% names(d)) names(d)[names(d) == old] <- col_map[old]
+  }
+  d$model <- model_label
+  d
+}
+
+ma_good <- load_results(path="../bayes/ma_good_results.rds", "MA(1) good")
+ma_bad <- load_results(path="../bayes/ma_bad_results.rds", "MA(1) bad")
+#ar1 <- load_results("ar1_results.rds", "AR(1)")
+
+ma_results <- bind_rows(ma_good, ma_bad)
+ma_results$method[which(ma_results$method=="tmb")] <- "RTMB"
+ma_results$Type <- factor(ma_results$method, levels = c("stan","tmbstan", "RTMB"))
+
+ar_good <- load_results(path="../bayes/ar_good_results.rds", "AR(1) good")
+ar_good_eps <- load_results(path="../bayes/ar_good_eps_results.rds", "AR(1) eps")
+ar_good_nodautoreg <- load_results(path="../bayes/ar_good_nodautoreg_results.rds", "AR(1) no dautoreg")
+```
+
+```{r summary-fn}
+## Summarise key metrics across replicates: mean (SD)
+fmt_mean_sd <- function(x) {
+  x <- x[is.finite(x)]
+  sprintf("%.2f (%.2f)", mean(x), sd(x))
+}
+
+make_summary_table <- function(df) {
+  metrics <- c("sampling_time", 
+               #"max_r_hat", 
+               "mean_n_eff", 
+               "pars_hi_rhat")
+  labels <- c(
+    "Sampling time (s)", 
+    #"Max Rhat", 
+    "Mean ESS",
+    "N pars Rhat > 1.15"
+  )
+
+  types <- unique(as.character(df$method))
+  out <- data.frame(Metric = labels)
+
+  for (tp in types) {
+    sub <- df[df$method == tp, ]
+    col <- sapply(metrics, function(m) {
+      if (m %in% names(sub)) fmt_mean_sd(sub[[m]]) else "—"
+    })
+    out[[tp]] <- col
+  }
+  
+  out <- rbind(out,
+               data.frame("Metric" = "All Rhat < 1.15",
+                          tmb = NA,
+                          tmbstan = length(which(df$method=="tmbstan" & df$max_r_hat < 1.15)),
+                          stan = length(which(df$method=="stan" & df$max_r_hat < 1.15))))
+  
+  out
+
+}
+```
+
+### MA(1) models
+
+```{r direct-comparison, echo=FALSE}
+ma_good_rtmb <- dplyr::filter(ma_good, method == "tmb")
+ma_bad_rtmb <- dplyr::filter(ma_bad, method == "tmb")
+ma_good_stan <- dplyr::filter(ma_good, method == "stan")
+ma_bad_stan <- dplyr::filter(ma_bad, method == "stan")
+ma_good_tmbstan <- dplyr::filter(ma_good, method == "tmbstan")
+ma_bad_tmbstan <- dplyr::filter(ma_bad, method == "tmbstan")
+```
+
+For the MA(1) models, we found little difference in speed between models
+that treated the innovations (deviates) as random effects versus
+recruitment. Implementations in RTMB showed that the 'bad' model
+(recruitment as random effects, Table \@ref(tab:table-ma-bad)) were
+`r round(median(ma_bad_rtmb$sampling_time / ma_good_rtmb$sampling_time),2)`
+times slower than the 'good' model (innovations as random effects, Table \@ref(tab:table-ma-good)). The
+Stan and tmbstan implementations had similar speeds between random
+effect implementations (good vs bad). The largest differences in our
+comparison were between Stan and tmbstan; Stan models finished in less
+than half the time
+(`r round(median(ma_bad_tmbstan$sampling_time / ma_bad_stan$sampling_time),2)`
+times for the bad model,
+`r round(median(ma_good_tmbstan$sampling_time / ma_good_stan$sampling_time),2)`
+for the good model), and had a much higher effective sample size. The
+choice of random effects had no impact on the number of models converged
+in Stan (n = 93) but modeling recruitment as random effects resulted in
+more models converging (n = 97 v 89).
+
+```{r table-ma-good, results='asis'}
+tab <- make_summary_table(ma_good)
+kable(tab,
+  caption = "MA(1) good implementation, with deviations as random effects. Mean (SD) across 100 replicates.",
+  align = c("l", "r", "r", "r")
+)
+```
+
+```{r table-ma-bad, results='asis'}
+tab <- make_summary_table(ma_bad)
+kable(tab,
+  caption = "MA(1) bad implementation, with log-recruitment as random effects. Mean (SD) across 100 replicates.",
+  align = c("l", "r", "r", "r")
+)
+```
+
+### AR(1) models
+
+As our first comparison, we can examine the effect of using `dautoreg`
+on speed and estimated (Table \@ref(tab:table-ar-dautoreg) vs Table \@ref(tab:table-ar-nodautoreg)). We see no effect of speed
+-- either in RTMB, or with MCMC. Again, the largest difference is the
+effect of sampling in Stan, which is faster than tmbstan and more
+efficient (resulting in higher ESS). In comparing the effects of random effects in recruitment deviations versus recruitment (Table \@ref(tab:table-ar-nodautoreg) vs Table \@ref(tab:table-ar-deviations)), we see a slight speed up in RTMB when estimating random effects in recruitment. Like the MA(1) comparisons, Stan samples approximately 2x as fast compared to RTMB:tmbstan, and is more efficient (higher ESS); there's little difference in ESS or speed between Stan implementations of the random effects, but the largest difference occurs for tmbstan.
+
+```{r table-ar-dautoreg, results='asis'}
+tab <- make_summary_table(ar_good)
+kable(tab,
+  caption = "AR(1) implementation with dautoreg, and log-recruitment as random effects. Mean (SD) across 100 replicates.",
+  align = c("l", "r", "r", "r")
+)
+```
+
+```{r table-ar-nodautoreg, results='asis'}
+tab <- make_summary_table(ar_good_nodautoreg)
+kable(tab,
+  caption = "AR(1) implementation without dautoreg, and log-recruitment as random effects. Mean (SD) across 100 replicates.",
+  align = c("l", "r", "r", "r")
+)
+```
+
+```{r table-ar-deviations, results='asis'}
+tab <- make_summary_table(ar_good_eps)
+kable(tab,
+  caption = "AR(1) implementation without dautoreg, and deviations as random effects. Mean (SD) across 100 replicates.",
+  align = c("l", "r", "r", "r")
+)
+```
+
+## Discussion
+
+- For MA(1) models, we recommend modelling deviations as random effects (good parameterisation). The RTMB implementation was much faster, and treating recruitment as random effects led to really poor estimation for some Bayesian models (Stan)
+
+- For AR(1) models, we recommend using recruitment as random effects. This was much faster than the deviations parameterization
+
+- RTMB's 'dautoreg' function seemed to have little to no impact on MCMC sampling speed or efficiency
