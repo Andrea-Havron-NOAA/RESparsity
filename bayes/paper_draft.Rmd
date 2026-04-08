@@ -267,7 +267,7 @@ more models converging (n = 97 v 89).
 ```{r table-ma-good, results='asis'}
 tab <- make_summary_table(ma_good)
 kable(tab,
-  caption = "MA(1) good implementation, with deviations as random effects. Mean (SD) across 100 replicates.",
+  caption = "MA(1) implementation, with deviations as random effects. Mean (SD) across 100 replicates.",
   align = c("l", "r", "r", "r")
 )
 ```
@@ -275,7 +275,7 @@ kable(tab,
 ```{r table-ma-bad, results='asis'}
 tab <- make_summary_table(ma_bad)
 kable(tab,
-  caption = "MA(1) bad implementation, with log-recruitment as random effects. Mean (SD) across 100 replicates.",
+  caption = "MA(1) implementation, with log-recruitment as random effects. Mean (SD) across 100 replicates.",
   align = c("l", "r", "r", "r")
 )
 ```
@@ -291,7 +291,7 @@ efficient (resulting in higher ESS). In comparing the effects of random effects 
 ```{r table-ar-dautoreg, results='asis'}
 tab <- make_summary_table(ar_good)
 kable(tab,
-  caption = "AR(1) implementation with dautoreg, and log-recruitment as random effects. Mean (SD) across 100 replicates.",
+  caption = "AR(1) implementation with dautoreg, and log-recruitment as random effects. Mean (SD) across 100 replicates. Because Stan doesn't have a dautoreg function, we compare against the Stan code without dautoreg.",
   align = c("l", "r", "r", "r")
 )
 ```
