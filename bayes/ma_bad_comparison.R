@@ -288,11 +288,31 @@ for (i in 1:n_sim_iter) {
   )
   mle_tmb <- toc(quiet = TRUE)
 
+  mle_list <- obj$env$parList(opt$par)
+
+  get_inits <- function(chain_id) {
+    set.seed(i * 100 + chain_id)
+    # jitter
+    inits <- lapply(mle_list, function(x) x + rnorm(length(x), 0, 0.01))
+    # for tmbstan subset logFA to only the 4 free parameters
+    inits$logFA <- inits$logFA[1:n_logFA_free]
+    return(inits)
+  }
+
+  all_inits_tmb <- lapply(1:n_chains, get_inits)
+
+  # for stan: rename logFA to logFA_free
+  all_inits_stan <- lapply(all_inits_tmb, function(x) {
+    x$logFA_free <- x$logFA
+    x$logFA <- NULL
+    return(x)
+  })
+
   tic()
   fit_tmb <- tmbstan(obj,
     chains = n_chains, cores = 1, iter = iter_hmc,
     control = list(adapt_delta = adapt_delta),
-    init = "last.par.best"
+    init = all_inits_tmb
   )
   tt_tmb <- toc(quiet = TRUE)
   p_tmb <- summary(fit_tmb)$summary
@@ -301,7 +321,9 @@ for (i in 1:n_sim_iter) {
   fit_stan <- sampling(stan_mod,
     data = stan_data, chains = n_chains,
     cores = n_chains, iter = iter_hmc,
-    control = list(adapt_delta = adapt_delta), refresh = 0
+    control = list(adapt_delta = adapt_delta),
+    init = all_inits_stan,
+    refresh = 0
   )
   tt_stan <- toc(quiet = TRUE)
   p_stan <- summary(fit_stan)$summary

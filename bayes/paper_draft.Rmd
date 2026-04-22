@@ -127,24 +127,29 @@ scale, and all other parameters were given Stan's default flat priors.
 
 ```{r table1, echo=FALSE}
 model_table <- data.frame(
-  Model      = c("MA",
-                          "MA",
-                          "AR",
-                          "AR",
-                          "AR"),
-  `Random effect`     = c("$\\varepsilon$",
-                          "$\\log N_{1,y}$",
-                          "$\\log N_{1,y}$ (dautoreg)",
-                          "$\\log N_{1,y}$ (loop)",
-                          "$\\varepsilon$"),
-  Hessian             = c("Sparse", "Dense", "Sparse", "Dense", "Sparse"),
+  Model = c(
+    "MA",
+    "MA",
+    "AR",
+    "AR",
+    "AR"
+  ),
+  `Random effect` = c(
+    "$\\varepsilon$",
+    "$\\log N_{1,y}$",
+    "$\\log N_{1,y}$ (dautoreg)",
+    "$\\log N_{1,y}$ (loop)",
+    "$\\varepsilon$"
+  ),
+  Hessian = c("Sparse", "Dense", "Sparse", "Dense", "Sparse"),
   check.names = FALSE
 )
 
 knitr::kable(model_table,
-             caption = "Summary of model implementations.",
-             align   = c("l", "l", "c"),
-             escape  = FALSE)
+  caption = "Summary of model implementations.",
+  align   = c("l", "l", "c"),
+  escape  = FALSE
+)
 ```
 
 ### Summary statistics
@@ -181,17 +186,17 @@ load_results <- function(path, model_label) {
   d
 }
 
-ma_good <- load_results(path="../bayes/ma_good_results.rds", "MA(1) good")
-ma_bad <- load_results(path="../bayes/ma_bad_results.rds", "MA(1) bad")
-#ar1 <- load_results("ar1_results.rds", "AR(1)")
+ma_good <- load_results(path = "../bayes/ma_good_results.rds", "MA(1) good")
+ma_bad <- load_results(path = "../bayes/ma_bad_results.rds", "MA(1) bad")
+# ar1 <- load_results("ar1_results.rds", "AR(1)")
 
 ma_results <- bind_rows(ma_good, ma_bad)
-ma_results$method[which(ma_results$method=="tmb")] <- "RTMB"
-ma_results$Type <- factor(ma_results$method, levels = c("stan","tmbstan", "RTMB"))
+ma_results$method[which(ma_results$method == "tmb")] <- "RTMB"
+ma_results$Type <- factor(ma_results$method, levels = c("stan", "tmbstan", "RTMB"))
 
-ar_good <- load_results(path="../bayes/ar_good_results.rds", "AR(1) good")
-ar_good_eps <- load_results(path="../bayes/ar_good_eps_results.rds", "AR(1) eps")
-ar_good_nodautoreg <- load_results(path="../bayes/ar_good_nodautoreg_results.rds", "AR(1) no dautoreg")
+ar_good <- load_results(path = "../bayes/ar_good_results.rds", "AR(1) good")
+ar_good_eps <- load_results(path = "../bayes/ar_good_eps_results.rds", "AR(1) eps")
+ar_good_nodautoreg <- load_results(path = "../bayes/ar_good_nodautoreg_results.rds", "AR(1) no dautoreg")
 ```
 
 ```{r summary-fn}
@@ -202,13 +207,15 @@ fmt_mean_sd <- function(x) {
 }
 
 make_summary_table <- function(df) {
-  metrics <- c("sampling_time", 
-               #"max_r_hat", 
-               "mean_n_eff", 
-               "pars_hi_rhat")
+  metrics <- c(
+    "sampling_time",
+    # "max_r_hat",
+    "mean_n_eff",
+    "pars_hi_rhat"
+  )
   labels <- c(
-    "Sampling time (s)", 
-    #"Max Rhat", 
+    "Sampling time (s)",
+    # "Max Rhat",
     "Mean ESS",
     "N pars Rhat > 1.15"
   )
@@ -223,15 +230,18 @@ make_summary_table <- function(df) {
     })
     out[[tp]] <- col
   }
-  
-  out <- rbind(out,
-               data.frame("Metric" = "All Rhat < 1.15",
-                          tmb = NA,
-                          tmbstan = length(which(df$method=="tmbstan" & df$max_r_hat < 1.15)),
-                          stan = length(which(df$method=="stan" & df$max_r_hat < 1.15))))
-  
-  out
 
+  out <- rbind(
+    out,
+    data.frame(
+      "Metric" = "All Rhat < 1.15",
+      tmb = NA,
+      tmbstan = length(which(df$method == "tmbstan" & df$max_r_hat < 1.15)),
+      stan = length(which(df$method == "stan" & df$max_r_hat < 1.15))
+    )
+  )
+
+  out
 }
 ```
 
