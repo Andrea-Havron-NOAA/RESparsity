@@ -312,6 +312,7 @@ for (i in 1:n_sim_iter) {
     data = stan_data, chains = n_chains,
     cores = n_chains, iter = iter_hmc,
     control = list(adapt_delta = adapt_delta), refresh = 0,
+    pars = names(rstan::extract(fit_tmb)),
     init = all_inits_stan
   )
   tt_stan <- toc(quiet = TRUE)

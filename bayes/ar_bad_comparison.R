@@ -269,7 +269,6 @@ results <- data.frame()
 for (i in 1:n_sim_iter) {
   dat <- simAR[[i]]
 
-
   stan_data <- list(
     n_obs = length(dat$obs),
     obs = dat$obs,
@@ -333,6 +332,7 @@ for (i in 1:n_sim_iter) {
     cores = n_chains, iter = iter_hmc,
     control = list(adapt_delta = adapt_delta),
     init = all_inits_stan,
+    pars = names(rstan::extract(fit_tmb)),
     refresh = 0
   )
   tt_stan <- toc(quiet = TRUE)
@@ -363,7 +363,6 @@ for (i in 1:n_sim_iter) {
     mean_neff = mean(p_stan[, "n_eff"], na.rm = TRUE),
     min_neff = min(p_stan[, "n_eff"], na.rm = TRUE)
   )
-
 
   results <- rbind(results, row_tmbmle, row_tmb, row_stan)
 }
