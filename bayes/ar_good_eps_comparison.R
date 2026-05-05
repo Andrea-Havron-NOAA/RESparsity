@@ -5,7 +5,7 @@
 library(RTMB)
 library(tmbstan)
 library(rstan)
-library(tictoc)
+library(bench)
 library(ggplot2)
 library(gridExtra)
 
@@ -294,11 +294,13 @@ for (i in 1:n_sim_iter) {
     silent = TRUE, random = "eps"
   )
 
-  tic()
-  opt <- nlminb(obj$par, obj$fn, obj$gr,
-    control = list(iter.max = 1000, eval.max = 1000)
+  mle_tmb <- bench::mark(
+    opt <- nlminb(obj$par, obj$fn, obj$gr,
+      control = list(iter.max = 1000, eval.max = 1000)
+    ),
+    iterations = 1,
+    check = FALSE
   )
-  mle_tmb <- toc(quiet = TRUE)
 
   mle_list <- obj$env$parList(opt$par)
 
@@ -319,31 +321,36 @@ for (i in 1:n_sim_iter) {
     return(x)
   })
 
-  tic()
-  fit_tmb <- tmbstan(obj,
-    chains = n_chains, cores = 1, iter = iter_hmc,
-    control = list(adapt_delta = adapt_delta),
-    init = all_inits_tmb
+  tt_tmb <- bench::mark(
+    fit_tmb <- tmbstan(obj,
+      chains = n_chains, cores = 1, iter = iter_hmc,
+      control = list(adapt_delta = adapt_delta),
+      init = all_inits_tmb
+    ),
+    iterations = 1,
+    check = FALSE
   )
-  tt_tmb <- toc(quiet = TRUE)
+
   p_tmb <- summary(fit_tmb)$summary
 
-  tic()
-  fit_stan <- sampling(stan_mod,
-    data = stan_data, chains = n_chains,
-    cores = n_chains, iter = iter_hmc,
-    control = list(adapt_delta = adapt_delta),
-    init = all_inits_stan,
-    pars = names(rstan::extract(fit_tmb)),
-    refresh = 0
+  tt_stan <- bench::mark(
+    fit_stan <- sampling(stan_mod,
+      data = stan_data, chains = n_chains,
+      cores = 1, iter = iter_hmc,
+      control = list(adapt_delta = adapt_delta),
+      init = all_inits_stan,
+      pars = names(rstan::extract(fit_tmb)),
+      refresh = 0
+    ),
+    iterations = 1,
+    check = FALSE
   )
-  tt_stan <- toc(quiet = TRUE)
 
   p_stan <- summary(fit_stan)$summary
 
   row_tmbmle <- data.frame(
     i = i, method = "tmb",
-    time_s = as.numeric(mle_tmb$toc - mle_tmb$tic),
+    time_s = as.numeric(mle_tmb$median),
     max_rhat = NA,
     pars_hi_rhat = NA,
     mean_neff = NA,
@@ -352,7 +359,7 @@ for (i in 1:n_sim_iter) {
 
   row_tmb <- data.frame(
     i = i, method = "tmbstan",
-    time_s = as.numeric(tt_tmb$toc - tt_tmb$tic),
+    time_s = as.numeric(tt_tmb$median),
     max_rhat = max(p_tmb[, "Rhat"], na.rm = TRUE),
     pars_hi_rhat = sum(p_tmb[, "Rhat"] > 1.15, na.rm = TRUE),
     mean_neff = mean(p_tmb[, "n_eff"], na.rm = TRUE),
@@ -360,7 +367,7 @@ for (i in 1:n_sim_iter) {
   )
   row_stan <- data.frame(
     i = i, method = "stan",
-    time_s = as.numeric(tt_stan$toc - tt_stan$tic),
+    time_s = as.numeric(tt_stan$median),
     max_rhat = max(p_stan[, "Rhat"], na.rm = TRUE),
     pars_hi_rhat = sum(p_stan[, "Rhat"] > 1.15, na.rm = TRUE),
     mean_neff = mean(p_stan[, "n_eff"], na.rm = TRUE),
