@@ -1,6 +1,6 @@
 ---
 title: 'Working Title - Sparsity in random effects under different parameterizations in fishery stock assessment models'
-author: 'Andrea M Havron$^{a,1,*}$, Anders Nielsen$^{b,2}$, Nathan Vaughan$^{c,3}$, Eric Ward$^{d,4}$'
+author: 'Andrea M Havron$^{a,1,*}$, Anders Nielsen$^{b,2}$, Nathan Vaughan$^{c,3}$, Eric J. Ward$^{d,4}$'
 date: "`r format(Sys.Date(), '%B %d, %Y')`"
 output: 
   bookdown::word_document2:
@@ -89,6 +89,15 @@ passed directly to Stan
 # Introduction
 Fishery stock assessment models in the United States provide options for modeling biological processes, such as recruitment, natural mortality, selectivity, and recruitment as time-varying. When models are based in ADMB, the common structural form of the time-varying process is hierarchical, where a vector of log-deviations typically follow a normal distribution with a fixed standard deviation value.  These values are then exponentiated and multiplied by the mean of the process, which can either be a single mean parameter or an output from a functional form (e.g. Beverton Holt recruitment), resulting in a vector of parameters that are unique for each time step. Models utilizing this approach have predominantly implemented log-deviations as estimated fixed effects and .  
 
+Drawing from the Bayesian literature, it is clear that model efficiency is not merely a matter of software implementation but is fundamentally tied to the geometric properties of the posterior distribution. In MCMC sampling, particularly within the Hamiltonian Monte Carlo (HMC) framework utilized by Stan, the choice between centered and non-centered parameterizations is often a response to the funnel geometry pathology (Betancourt & Girolami, 2015). This pathology occurs when a sampler struggles to explore the narrow regions of a distribution where the group-level variance is small -- a common issue in hierarchical models with sparse data (Monnahan et al., 2016). Specifically, a non-centered parameterization effectively stretches this funnel, allowing HMC to sample more efficiently by breaking the strong a priori dependence between hierarchical levels (Gorinova et al., 2019). However, if the data are highly informative, a centered parameterization may actually be more efficient, as the data can "pin down" the parameters and reduce the correlations that otherwise slow down the sampler (Papaspiliopoulos et al., 2007; Gorinova et al., 2019). Within the context of fisheries stock assessment models, there are many examples of random effects being estimated with centered or non-centered pararmeterizations; one of the clearest example of this is when random effects are used to model recruitment (centered parameterizations generally model recruitment, while non-centered parameterizations generally model recruitment deviations). 
+
+Betancourt, M., & Girolami, M. (2015). https://arxiv.org/abs/1312.0906 
+
+Gorinova 2019 https://doi.org/10.48550/arxiv.1906.03028
+
+Papaspiliopoulos 2007 https://projecteuclid.org/journals/statistical-science/volume-22/issue-1/A-General-Framework-for-the-Parametrization-of-Hierarchical-Models/10.1214/088342307000000014.full
+
+EW: Could add ecological refs
 
 # Methods
 
@@ -300,17 +309,7 @@ recruitment. Implementations in RTMB showed that the 'bad' model
 (recruitment as random effects, Table \@ref(tab:table-ma-bad)) were
 `r round(median(ma_bad_rtmb$sampling_time / ma_good_rtmb$sampling_time),2)`
 times slower than the 'good' model (innovations as random effects, Table \@ref(tab:table-ma-good)). The
-Stan and tmbstan implementations had similar speeds between random
-effect implementations (good vs bad). The largest differences in our
-comparison were between Stan and tmbstan; Stan models finished in less
-than half the time
-(`r round(median(ma_bad_tmbstan$sampling_time / ma_bad_stan$sampling_time),2)`
-times for the bad model,
-`r round(median(ma_good_tmbstan$sampling_time / ma_good_stan$sampling_time),2)`
-for the good model), and had a much higher effective sample size. The
-choice of random effects had no impact on the number of models converged
-in Stan (n = 93) but modeling recruitment as random effects resulted in
-more models converging (n = 97 v 89).
+Stan and tmbstan implementations had similar average speeds across the two implementations, however the Stan models were slower on average than tmbstan (93 vs 65 seconds in tmbstan for the deviations approach; 70 vs 58 seconds in tmbstan for the recruitment approach).
 
 ```{r table-ma-good, results='asis'}
 tab <- make_summary_table(ma_good)
@@ -332,9 +331,7 @@ kable(tab,
 
 As our first comparison, we can examine the effect of using `dautoreg`
 on speed and estimated (Table \@ref(tab:table-ar-dautoreg) vs Table \@ref(tab:table-ar-nodautoreg)). We see no effect of speed
--- either in RTMB, or with MCMC. Again, the largest difference is the
-effect of sampling in Stan, which is faster than tmbstan and more
-efficient (resulting in higher ESS). In comparing the effects of random effects in recruitment deviations versus recruitment (Table \@ref(tab:table-ar-nodautoreg) vs Table \@ref(tab:table-ar-deviations)), we see a slight speed up in RTMB when estimating random effects in recruitment. Like the MA(1) comparisons, Stan samples approximately 2x as fast compared to RTMB:tmbstan, and is more efficient (higher ESS); there's little difference in ESS or speed between Stan implementations of the random effects, but the largest difference occurs for tmbstan.
+-- either in RTMB, or with MCMC. Between Stan and tmbstan, both approaches yield similar metrics of efficiency and run time. Comparing the parameterizations of the recruitment formulation vs deviations formulation (Table \@ref(tab:table-ar-nodautoreg) vs Table \@ref(table-ar-deviations)) highlights that modeling recuitment results in more efficient sampling (> 2x ESS) in less than half the speed when random effects are included in recruitment, rather than deviations. 
 
 ```{r table-ar-dautoreg, results='asis'}
 tab <- make_summary_table(ar_good)
