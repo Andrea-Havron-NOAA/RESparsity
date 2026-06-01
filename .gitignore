@@ -50,7 +50,6 @@ rsconnect/
 
 # figs/qmd output
 *.pdf
-*.png
 *.html
 *.js
 *.woff

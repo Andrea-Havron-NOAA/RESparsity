@@ -1,9 +1,9 @@
 library(RTMB)
 library(bench)
 
-# Setup models for sparse and manual parameterizations
+# Setup models for process and deviations parameterizations
 
-ar1_sparse_dautoreg <- function(par) {
+ar1_process_dautoreg <- function(par) {
   getAll(dat, par)
   phi <- 2 * plogis(tPhi) - 1
   time_steps <- length(x)
@@ -18,7 +18,7 @@ ar1_sparse_dautoreg <- function(par) {
   nll
 }
 
-ar1_manual <- function(par) {
+ar1_deviations <- function(par) {
   getAll(dat, par)
   phi <- 2 * plogis(tPhi) - 1
   time_steps <- length(x)
@@ -67,19 +67,20 @@ for (ii in 1:10) {
   par <- list(logSigma = 0, tPhi = 0,
               logSigmaObs = 0, x = rep(0, length(x)))
 
-  # run sparse model
-  obj_sparse_dautoreg <- MakeADFun(ar1_sparse_dautoreg, par, random = "x",
+  # run process model
+  obj_process_dautoreg <- MakeADFun(ar1_process_dautoreg, par, random = "x",
                                    silent = TRUE)
-  opt_sparse_dautoreg <- nlminb(obj_sparse_dautoreg$par,
-                                obj_sparse_dautoreg$fn,
-                                obj_sparse_dautoreg$gr,
+  opt_process_dautoreg <- nlminb(obj_process_dautoreg$par,
+                                obj_process_dautoreg$fn,
+                                obj_process_dautoreg$gr,
                                 control = list(iter.max = 1000,
                                                eval.max = 1000))
 
-  # run manual model
-  obj_manual <- MakeADFun(ar1_manual, par, random = "x", silent = TRUE)
-  opt_manual <- nlminb(obj_manual$par, obj_manual$fn, obj_manual$gr,
-                       control = list(iter.max = 1000, eval.max = 1000))
+  # run deviations model
+  obj_deviations <- MakeADFun(ar1_deviations, par, random = "x", silent = TRUE)
+  opt_deviations <- nlminb(obj_deviations$par, obj_deviations$fn,
+                           obj_deviations$gr, 
+                           control = list(iter.max = 1000, eval.max = 1000))
 }
 
 
@@ -109,54 +110,83 @@ results <- bench::press(
     par <- list(logSigma = 0, tPhi = 0,
                 logSigmaObs = 0, x = rep(0, length(x)))
 
+
     results <- bench::mark(
-      sparse = {
-        # run sparse model
-        obj_sparse_dautoreg <- MakeADFun(ar1_sparse_dautoreg, par,
-                                         random = "x", silent = TRUE)
-        opt_sparse_dautoreg <- nlminb(obj_sparse_dautoreg$par,
-                                      obj_sparse_dautoreg$fn,
-                                      obj_sparse_dautoreg$gr,
-                                      control=list(iter.max = 1000,
-                                                   eval.max = 1000))
+      process_obj = {
+        # run process model
+        obj_process_dautoreg <- MakeADFun(ar1_process_dautoreg, par,
+                                          random = "x", silent = TRUE)
       },
-      manual = {
-        # run manual model
-        obj_manual <- MakeADFun(ar1_manual, par, random = "x", silent = TRUE)
-        opt_manual <- nlminb(obj_manual$par, obj_manual$fn, obj_manual$gr,
-                             control = list(iter.max = 1000, eval.max = 1000))
+
+      process_opt = {
+        opt_process_dautoreg <- nlminb(obj_process_dautoreg$par,
+                                       obj_process_dautoreg$fn,
+                                       obj_process_dautoreg$gr,
+                                       control = list(iter.max = 1000,
+                                                      eval.max = 1000))
       },
-      iterations = 100, time_unit = "s", filter_gc = FALSE
+
+      deviations_obj = {
+        # run deviations model
+        obj_deviations <- MakeADFun(ar1_deviations, par,
+                                    random = "x", silent = TRUE)
+      },
+
+      deviations_opt = {
+        opt_deviations <- nlminb(obj_deviations$par,
+                                 obj_deviations$fn,
+                                 obj_deviations$gr,
+                                 control = list(iter.max = 1000,
+                                                eval.max = 1000))
+      },
+      iterations = 100, time_unit = "s", filter_gc = FALSE, check = FALSE
     )
   }
 )
 
+expr <-  results$expression |> attr(which = "description")
 # set-up dataframe
 df <- data.frame(
   n = results$n,
-  expression = rep(c("process", "deviations"), 7),
+  expression = expr,
   median_time = results$median,
   memory = results$mem_alloc
 )
+
+df$method <- rep(c("process", "process", "deviations", "deviations"), 7)
+df$func <- rep(c("obj", "opt"), 14)
+
+df_total <- df |>
+  dplyr::group_by(n, method) |>
+  dplyr::summarize(total_time = sum(median_time),
+                   total_memory = sum(memory))
+df_total$func = "Total"
+facet_names = c("obj" = "MakeADFun", "opt" = "nlminb", "Total" = "Total")
 
 # plot results
 library(ggplot2)
 png("figures/ar1_benchmark.png", width = 6, height = 4, units = "in", res = 300)
 df |>
-  ggplot(mapping = aes(x = n, y = median_time |> log(), color = expression)) +
+  ggplot(mapping = aes(x = n, y = median_time |> log(), color = method)) +
   geom_line() +
   geom_point() +
+  geom_line(data = df_total, mapping = aes(x = n, y = total_time |> log(), color = method)) +
+  geom_point(data = df_total, mapping = aes(x = n, y = total_time |> log(), color = method)) +
   labs(x = "Number of time steps (N)", y = "Log of Median time, 
        log(seconds)", color = "Method") +
-  theme_minimal()
+  theme_minimal() + facet_wrap(~func, labeller = as_labeller(facet_names)) +
+  theme(strip.text = element_text(face = "bold"))
 dev.off()
 
 png("figures/ar1_memory.png", width = 6, height = 4, units = "in", res = 300)
 df |>
-  ggplot(mapping = aes(x = n, y = memory, color = expression)) +
+  ggplot(mapping = aes(x = n, y = memory, color = method)) +
   geom_line() +
   geom_point() +
+  geom_line(data = df_total, mapping = aes(x = n, y = total_memory, color = method)) +
+  geom_point(data = df_total, mapping = aes(x = n, y = total_memory, color = method)) +
   labs(x = "Number of time steps (N)", y = "Memory allocation", 
        color = "Method") +
-  theme_minimal()
+  theme_minimal() + facet_wrap(~func, labeller = as_labeller(facet_names)) +
+  theme(strip.text = element_text(face = "bold"))
 dev.off()
