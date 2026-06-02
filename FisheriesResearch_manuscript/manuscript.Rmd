@@ -85,6 +85,7 @@ passed directly to Stan
 
 -   other?
 
+* need to decide on jargon: innovations vs deviations? process v. log-recruitment? etc
 
 # Introduction
 Drawing from the Bayesian literature, it is clear that model efficiency is not merely a matter of software implementation but is fundamentally tied to the geometric properties of the posterior distribution. In MCMC sampling, particularly within the Hamiltonian Monte Carlo (HMC) framework utilized by Stan, the choice between centered and non-centered parameterizations is often a response to the funnel geometry pathology (Betancourt & Girolami, 2015). This pathology occurs when a sampler struggles to explore the narrow regions of a distribution where the group-level variance is small -- a common issue in hierarchical models with sparse data (Monnahan et al., 2016). Specifically, a non-centered parameterization effectively stretches this funnel, allowing HMC to sample more efficiently by breaking the strong a priori dependence between hierarchical levels (Gorinova et al., 2019). However, if the data are highly informative, a centered parameterization may actually be more efficient, as the data can "pin down" the parameters and reduce the correlations that otherwise slow down the sampler (Papaspiliopoulos et al., 2007; Gorinova et al., 2019). 
@@ -133,7 +134,7 @@ $$\log N_{1,y} = \mu_R + \varepsilon_y + \theta \varepsilon_{y-1}, \quad \vareps
 where $\theta = 2\,\text{logit}^{-1}(\tilde\theta_R) - 1$.
 
 Our second formulation simulated annual recruitment as a first order
-autoregressive process,
+autoregressive AR(1) process,
 
 $$\log N_{1,y} = \phi \log N_{1,y-1} + \mu_R(1 - \phi) + \sigma_R z_y, \quad z_y \sim N(0,1)$$
 where the AR parameter $\phi = 2\,\text{logit}^{-1}(\tilde\phi_R) - 1$.
@@ -215,6 +216,11 @@ and the number of parameters with $\hat{R} > 1.15$. Results are
 presented as mean (SD) across replicates.
 
 # Results
+
+For the AR(1) formulation, we found the strongest support for implementing random effects using the process (log-recruitment) as random effects, instead of the innovations (deviations). Across the 100 simulated datasets, the maximum likelihood optimization in RTMB was faster on average (Table \@ref(tab:table-ar-nodautoreg) vs Table \@ref(table-ar-deviations)). This difference becomes even stronger with our Bayesian comparisons. While we found similar effective sample size (ESS) and run time between `tmbstan` and `rstan`, parameterizing random effects in log-recruitment was more efficient: this approach resulted in 105.1 and 78.6 samples / second for `tmbstan` and `rstan` respectively, versus 6.4 and 17.5 samples / second for each when parameterizing random effects in innovations (Table \@ref(tab:table-ar-nodautoreg) vs Table \@ref(table-ar-deviations)). We found little difference in the AR(1) formulation on maximum likelihood estimation with and without RTMB's `dautoreg` function, (Table \@ref(tab:table-ar-dautoreg) vs Table \@ref(tab:table-ar-nodautoreg)).
+
+For the MA(1) estimation model, we found that implementing random effects in the deviations resulted in faster maximum likelihood optimization (0.09 sec vs 0.15 sec, \@ref(tab:table-ma-good) \@ref(tab:table-ma-bad) ). Stan and tmbstan implementations had similar average speeds across the two implementations with slight efficiency advantages in `tmbstan` -- with random effects in deviations, `tmbstan` and `rstan` sampled 32.7 and 23.9 samples / sec, respectively, while with random effects in the process (log-recruitment), these approaches samples 30.57 and 25.2 samples / sec (0.09 sec vs 0.15 sec, \@ref(tab:table-ma-good) \@ref(tab:table-ma-bad) ).
+
 
 ```{r load-data}
 ## Load result files and standardize column names
@@ -300,8 +306,6 @@ make_summary_table <- function(df) {
 }
 ```
 
-### MA(1) models
-
 ```{r direct-comparison, echo=FALSE}
 ma_good_rtmb <- dplyr::filter(ma_good, method == "tmb")
 ma_bad_rtmb <- dplyr::filter(ma_bad, method == "tmb")
@@ -310,14 +314,6 @@ ma_bad_stan <- dplyr::filter(ma_bad, method == "stan")
 ma_good_tmbstan <- dplyr::filter(ma_good, method == "tmbstan")
 ma_bad_tmbstan <- dplyr::filter(ma_bad, method == "tmbstan")
 ```
-
-For the MA(1) models, we found little difference in speed between models
-that treated the innovations (deviates) as random effects versus
-recruitment. Implementations in RTMB showed that the 'bad' model
-(recruitment as random effects, Table \@ref(tab:table-ma-bad)) were
-`r round(median(ma_bad_rtmb$sampling_time / ma_good_rtmb$sampling_time),2)`
-times slower than the 'good' model (innovations as random effects, Table \@ref(tab:table-ma-good)). The
-Stan and tmbstan implementations had similar average speeds across the two implementations, however the Stan models were slower on average than tmbstan (93 vs 65 seconds in tmbstan for the deviations approach; 70 vs 58 seconds in tmbstan for the recruitment approach).
 
 ```{r table-ma-good, results='asis'}
 tab <- make_summary_table(ma_good)
@@ -334,12 +330,6 @@ kable(tab,
   align = c("l", "r", "r", "r")
 )
 ```
-
-## AR(1) models
-
-As our first comparison, we can examine the effect of using `dautoreg`
-on speed and estimated (Table \@ref(tab:table-ar-dautoreg) vs Table \@ref(tab:table-ar-nodautoreg)). We see no effect of speed
--- either in RTMB, or with MCMC. Between Stan and tmbstan, both approaches yield similar metrics of efficiency and run time. Comparing the parameterizations of the recruitment formulation vs deviations formulation (Table \@ref(tab:table-ar-nodautoreg) vs Table \@ref(table-ar-deviations)) highlights that modeling recuitment results in more efficient sampling (> 2x ESS) in less than half the speed when random effects are included in recruitment, rather than deviations. 
 
 ```{r table-ar-dautoreg, results='asis'}
 tab <- make_summary_table(ar_good)
