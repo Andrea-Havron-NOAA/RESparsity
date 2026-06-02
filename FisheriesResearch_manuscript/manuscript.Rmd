@@ -315,29 +315,6 @@ ma_good_tmbstan <- dplyr::filter(ma_good, method == "tmbstan")
 ma_bad_tmbstan <- dplyr::filter(ma_bad, method == "tmbstan")
 ```
 
-```{r table-ma-good, results='asis'}
-tab <- make_summary_table(ma_good)
-kable(tab,
-  caption = "MA(1) implementation, with deviations as random effects. Mean (SD) across 100 replicates.",
-  align = c("l", "r", "r", "r")
-)
-```
-
-```{r table-ma-bad, results='asis'}
-tab <- make_summary_table(ma_bad)
-kable(tab,
-  caption = "MA(1) implementation, with log-recruitment as random effects. Mean (SD) across 100 replicates.",
-  align = c("l", "r", "r", "r")
-)
-```
-
-```{r table-ar-dautoreg, results='asis'}
-tab <- make_summary_table(ar_good)
-kable(tab,
-  caption = "AR(1) implementation with dautoreg, and log-recruitment as random effects. Mean (SD) across 100 replicates. Because Stan doesn't have a dautoreg function, we compare against the Stan code without dautoreg.",
-  align = c("l", "r", "r", "r")
-)
-```
 
 ```{r table-ar-nodautoreg, results='asis'}
 tab <- make_summary_table(ar_good_nodautoreg)
@@ -351,6 +328,30 @@ kable(tab,
 tab <- make_summary_table(ar_good_eps)
 kable(tab,
   caption = "AR(1) implementation without dautoreg, and deviations as random effects. Mean (SD) across 100 replicates.",
+  align = c("l", "r", "r", "r")
+)
+```
+
+```{r table-ar-dautoreg, results='asis'}
+tab <- make_summary_table(ar_good)
+kable(tab,
+  caption = "AR(1) implementation with dautoreg, and log-recruitment as random effects. Mean (SD) across 100 replicates. Because Stan doesn't have a dautoreg function, we compare against the Stan code without dautoreg.",
+  align = c("l", "r", "r", "r")
+)
+```
+
+```{r table-ma-good, results='asis'}
+tab <- make_summary_table(ma_good)
+kable(tab,
+  caption = "MA(1) implementation, with deviations as random effects. Mean (SD) across 100 replicates.",
+  align = c("l", "r", "r", "r")
+)
+```
+
+```{r table-ma-bad, results='asis'}
+tab <- make_summary_table(ma_bad)
+kable(tab,
+  caption = "MA(1) implementation, with log-recruitment as random effects. Mean (SD) across 100 replicates.",
   align = c("l", "r", "r", "r")
 )
 ```
