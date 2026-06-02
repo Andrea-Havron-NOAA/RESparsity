@@ -110,6 +110,10 @@ EW: Could add ecological refs
 
 # Methods
 
+## Software tools
+
+We were interested in conducting estimation in both maximum likelihood and Bayesian frameworks. We conducted analyses using TMB (Template Model Builder), RTMB, tmbstan, and Stan. TMB is an R package that enables efficient estimation of complex statistical models through automatic differentiation and Laplace approximation implemented in C++. RTMB provides a higher-level interface to TMB that allows model specification directly within R. For Bayesian estimation, Stan is a probabilistic programming language and statistical inference platform that uses gradient-based Markov chain Monte Carlo methods, including Hamiltonian Monte Carlo and the No-U-Turn Sampler. The tmbstan package integrates TMB and Stan by applying Stan's sampling algorithms to models specified in TMB, thereby facilitating Bayesian inference for models developed within the TMB framework. Together, these software tools support both maximum-likelihood and Bayesian approaches to fitting complex hierarchical and latent-variable models. [maybe add links to FIMS paper / decisions about why to use these methods / etc]
+
 ## Simulation models
 
 We used an age-structured model based on the `simplefsa` fisheries
