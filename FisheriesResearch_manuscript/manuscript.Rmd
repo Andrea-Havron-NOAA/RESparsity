@@ -92,9 +92,9 @@ Drawing from the Bayesian literature, it is clear that model efficiency is not m
 
 Within the context of fisheries stock assessment models, there are many examples of hierarchical variables being estimated with centered or non-centered pararmeterizations; one of the clearest example of this is when variability is added to recruitment either by modeling the process itself, $recruitment ~ N(\mu_{r}, \sigma_{r})$ (centered parameterization), or by modeling the deviations around a mean, $deviations ~ N(0, \sigma_{r}), recruitment = \mu_{r}*\sigma_{r}$ (non-centered parameterizations). Historically, models reliant on ADMB estimate the deviations as fixed effects undered a constrained optimization where the variance, $\sigma_{r}$ is fixed. In several tools, such as Stock Synthesis, sum to zero constraints have been applied to ensure that Hessian matrices are positive definite. A fixed-effect vector of deviation parameters does not require second order partial derivatives to be estimated until model optimization is complete and variance is estimated.
 
-Several next generation stock assessment models have changed dependency from ADMB to Template Model Builder (Kristensen et al., 2016) in order to incorporate the use of the Laplace approximation to integrate out hierarchical variables (i.e. random effects), allowing the estimation of the hierarchical variance parameter, e.g. $\sigma_{r}$ (SAM, WHAM, FIMS). The Laplace approximation requires up to third-order derivates for its evaluations, thus necessitating a Jacobian calculation and Hessian inversion at each optimization step.  
+Several next generation stock assessment models have changed dependency from ADMB to Template Model Builder (Kristensen et al., 2016) in order to incorporate the use of the Laplace approximation to integrate out hierarchical variables (i.e. random effects), allowing the estimation of the hierarchical variance parameter, e.g. $\sigma_{r}$ (SAM, WHAM, FIMS). The Laplace approximation requires up to third-order derivates for its evaluations, thus necessitating a Jacobian calculation and Hessian inversion at each optimization step. Under time series properties,  
 
-To quantify the magnitude of this penalty we investigate the performance and optimization time of a simple random effects model under equivalent sparse vs dense parameterizations. For this example we utilize two simple proxy models; an auto regressive AR1 function and a simple stock assessment model based on babySAM. These proxies should reflect the relative performance gains expected in the real-world correlated time-varying processes modeled in stock assessments such as recruitment. Each of these time-series models can be parameterized as a dense matrix, representing the traditional parameter deviations as a random-effects approach, or as a sparse matrix, as would be achieved by directly estimating annual parameter values as random effects.
+To quantify the magnitude of this penalty we investigate the performance and optimization time of a simple random effects model under equivalent sparse vs dense parameterizations. For this example we utilize two simple proxy models; an autoregressive model and a simple stock assessment model based on babySAM. These proxies should reflect the relative performance gains expected in the real-world correlated time-varying processes modeled in stock assessments such as recruitment. Each of these time-series models can be parameterized as a dense matrix, representing the traditional parameter deviations as a random-effects approach, or as a sparse matrix, as would be achieved by directly estimating annual parameter values as random effects.
 
 These two approaches are anticipated to produce mathematically equivalent results while differing in their computational overhead. Confirming this equivalency and quantifying the runtime improvement will provide support for the change in approach relative to previous assessment models.
 
@@ -112,11 +112,37 @@ EW: Could add ecological refs
 
 ## Software tools
 
-We were interested in conducting estimation in both maximum likelihood and Bayesian frameworks. We conducted analyses using TMB (Template Model Builder), RTMB, tmbstan, and Stan. TMB is an R package that enables efficient estimation of complex statistical models through automatic differentiation and Laplace approximation implemented in C++. RTMB provides a higher-level interface to TMB that allows model specification directly within R. For Bayesian estimation, Stan is a probabilistic programming language and statistical inference platform that uses gradient-based Markov chain Monte Carlo methods, including Hamiltonian Monte Carlo and the No-U-Turn Sampler. The tmbstan package integrates TMB and Stan by applying Stan's sampling algorithms to models specified in TMB, thereby facilitating Bayesian inference for models developed within the TMB framework. Together, these software tools support both maximum-likelihood and Bayesian approaches to fitting complex hierarchical and latent-variable models. [maybe add links to FIMS paper / decisions about why to use these methods / etc]
+We were interested in conducting estimation in both maximum likelihood and Bayesian frameworks. We conducted analyses using TMB (Template Model Builder), RTMB, tmbstan, and Stan. TMB is an R package that enables efficient estimation of complex statistical models through automatic differentiation and Laplace approximation implemented in C++. RTMB provides a higher-level interface to TMB that allows model specification directly within R. For Bayesian estimation, Stan is a probabilistic programming language and statistical inference platform that uses gradient-based Markov chain Monte Carlo methods, including Hamiltonian Monte Carlo and the No-U-Turn Sampler. The tmbstan package integrates TMB and Stan by applying Stan's sampling algorithms to models specified in TMB, thereby facilitating Bayesian inference for models developed within the TMB framework. Together, these software tools support both maximum-likelihood and Bayesian approaches to fitting complex hierarchical and latent-variable models. [maybe add links to FIMS paper / decisions about why to use these methods / etc]. Simulations (n = 100) were run using the R package **bench** to compare median run times and memory usage. 
 
 ## Simulation models
 
-We used an age-structured model based on the `simplefsa` fisheries
+We set up a simple time series model structured using a first-order autoregressive (AR1) and moveing average (MA1) autocorrelation process. Given a latent state, $x_{t}$ at time $t$, the AR1 model is defined as: 
+$x_{t} = \phi * x_{t-1} + \epsilon_{t}$, using two parameterizations:
+
+1. process approach: $x_{t} \sim N(\phi * x_{t-1}, \sigma^{2}_{\lambda})$
+2. deviations approach: $x_{t} = \phi * x_{t-1} + \sigma * z_{t},~~ z_{t} \sim N(0,1)$,
+
+where $\sigma$ is the process standard deviation and $\phi$ is the autoregressive coefficient, transformed as: $\phi=2*\text{plogis}(\text{phiTrans})-1$, which ensures $\phi$ remains in the range (-1,1). The stationary variance of the process is: $\text{Var}(\lambda)=\frac{\sigma^2}{(1-\phi^2)}$. 
+
+Under a random-effects model, the process approach puts the random effect on $x_{t}$, while in the deviations approach, the random effect is applied to $z_{t}$. The joint negative log likelihood for this process is computed in state-space form where the process of the current time step is dependent on the previous one and observations, $y$ are *iid* Normal.
+
+The MA1 model is defined as: $x_t = w_t + \theta w_{t-1}$, using two parameterizations: 
+
+**Process Parameterization**  
+
+$w_{t} = x_{t} - \theta w_{t-1}$<br>
+$w_t \sim N(0, \sigma_{x})$<br>
+$y_{t} \sim N(x_{t}, \sigma_{y})$<br>
+where $w$ and $x$ are treated as random
+
+** Deviations Parameterization**  
+
+$w_t \sim N(0, \sigma_{w})$<br>
+$x_{t} = w_{t} + \theta w_{t-1}$<br>
+$y_{t} \sim N(x_{t}, \sigma_{y})$<br>
+where $w$ is treated as random.
+
+In addition to the simple time series model, we used an age-structured model based on the `simplefsa` fisheries
 dataset [more detail from Anders]. The model tracks log-numbers-at-age
 ($\log N_{a,y}$) over age classes $a = 1, \ldots, A$ and years
 $y = 1, \ldots, T$. Fishing mortality is modeled as a separable age-year
