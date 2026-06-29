@@ -1,6 +1,11 @@
 library(RTMB)
 library(bench)
 
+# Randomly draw seed using Sys.time()
+# random_seed <- as.integer(Sys.time()) %% 100000
+# print(random_seed)
+random_seed <- 38139
+
 # Setup models for process and deviation parameterizations
 
 ma1_process <- function(par) {
@@ -41,6 +46,12 @@ ma1_deviation <- function(par) {
   nll
 }
 
+#True parameters and initial condition
+sd <- 1
+sdo <- 1
+phi <- 0.7
+set.seed(random_seed)
+
 # Warm-up: run models a number of times to remove the effects of C++ linking
 # and memory allocation
 for (ii in 1:10) {
@@ -48,9 +59,6 @@ for (ii in 1:10) {
   #simulate data
   n <- 30
   set.seed(ii)
-  sd <- 1
-  sdo <- 1
-  phi <- 0.7
 
   # simulate ma1 process
   eps <- rnorm(n + 1, sd = sd)
@@ -85,24 +93,27 @@ for (ii in 1:10) {
 }
 
 
+set.seed(random_seed)
+# state vector
+n_sim <- 500
+x_sim <- rep(0, n_sim)
+
+
+# simulate ma1 process
+eps <- rnorm(n_sim + 1, sd = sd)
+x <- rep(0, n_sim)
+for (i in 1:n_sim) {
+  x[i] <- eps[i + 1] + phi * eps[i]
+}
+
+# simulate observations
+y <- x + rnorm(length(x), sd = sdo)
+
 results <- bench::press(
   n = c(30, 50, 100, 200, 300, 400, 500),
   {
-    set.seed(n)
-    sd <- 1
-    sdo <- 1
-    phi <- 0.7
-
-    # simulate ma1 process
-    eps <- rnorm(n + 1, sd = sd)
-    x <- rep(0, n)
-    for (i in 1:n) {
-      x[i] <- eps[i + 1] + phi * eps[i]
-    }
-
-    # simulate observations
-    y <- x + rnorm(length(x), sd = sdo)
-    dat <- data.frame(y = y)
+    gc(reset = TRUE)
+    dat <- data.frame(y = y[1:n])
 
     # dat needs to be globally accessible
     dat <<- dat

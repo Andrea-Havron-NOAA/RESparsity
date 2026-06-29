@@ -47,7 +47,7 @@ ar1_deviations <- function(par) {
 sd <- 1
 sdo <- 1
 phi <- 0.7
-set.seed(random.seed)
+set.seed(random_seed)
 x_init <- rnorm(1, sd = sqrt(sd * sd / (1 - phi * phi)))
 
 # Warm-up: run models a number of times to remove the effects of C++ linking
@@ -109,6 +109,7 @@ y <- x_sim + rnorm(n_sim, sd = sdo)
 results <- bench::press(
   n = c(30, 50, 100, 200, 300, 400, 500),
   {
+    gc(reset = TRUE)
     dat <- data.frame(y = y[1:n])
     # dat needs to be globally accessible
     dat <<- dat
@@ -149,7 +150,6 @@ results <- bench::press(
     )
   }
 )
-
 expr <-  results$expression |> attr(which = "description")
 # set-up dataframe
 df <- data.frame(
