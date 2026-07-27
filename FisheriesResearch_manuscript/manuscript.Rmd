@@ -114,7 +114,7 @@ EW: Could add ecological refs
 
 ## Software tools
 
-We were interested in conducting estimation in both maximum likelihood and Bayesian frameworks. We conducted analyses using TMB (Template Model Builder), RTMB, tmbstan, and Stan. TMB is an R package that enables efficient estimation of complex statistical models through automatic differentiation and Laplace approximation implemented in C++. RTMB provides a higher-level interface to TMB that allows model specification directly within R. For Bayesian estimation, Stan is a probabilistic programming language and statistical inference platform that uses gradient-based Markov chain Monte Carlo methods, including Hamiltonian Monte Carlo and the No-U-Turn Sampler. The tmbstan package integrates TMB and Stan by applying Stan's sampling algorithms to models specified in TMB, thereby facilitating Bayesian inference for models developed within the TMB framework. Together, these software tools support both maximum-likelihood and Bayesian approaches to fitting complex hierarchical and latent-variable models. [maybe add links to FIMS paper / decisions about why to use these methods / etc]. Simulations (n = 100) were run using the R package **bench** to compare median run times and memory usage. 
+We conducted analyses in both maximum likelihood and Bayesian frameworks using TMB (Template Model Builder), RTMB, tmbstan, and Stan. TMB is an R package that enables efficient estimation of complex statistical models through automatic differentiation and Laplace approximation implemented in C++. RTMB provides a higher-level interface to TMB that allows model specification directly within R. For Bayesian estimation, Stan is a probabilistic programming language and statistical inference platform that uses gradient-based Markov chain Monte Carlo methods, including Hamiltonian Monte Carlo and the No-U-Turn Sampler. The tmbstan package integrates TMB and Stan by applying Stan's sampling algorithms to models specified in TMB, thereby facilitating Bayesian inference for models developed within the TMB framework. Together, these software tools support both maximum-likelihood and Bayesian approaches to fitting complex hierarchical and latent-variable models. [maybe add links to FIMS paper / decisions about why to use these methods / etc]. Iterations (n = 100) were run using the R package **bench** to compare median run times and memory usage. 
 
 ## Simulation models
 
@@ -123,10 +123,10 @@ We considered both autogregressive AR(1) and moving average MA(1) recruitment st
 We set up a simple time series model structured using a first-order autoregressive (AR1) and moveing average (MA1) autocorrelation process. Given a latent state, $x_{t}$ at time $t$, the AR1 model is defined as: 
 $x_{t} = \phi * x_{t-1} + \epsilon_{t}$, using two parameterizations:
 
-1. process approach: $x_{t} \sim N(\phi * x_{t-1}, \sigma^{2}_{\lambda})$
-2. deviations approach: $x_{t} = \phi * x_{t-1} + \sigma * z_{t},~~ z_{t} \sim N(0,1)$,
+1. process approach: $x_{t} \sim N(\phi * x_{t-1}, \sigma_{x}^{2})$
+2. deviations approach: $x_{t} = \phi * x_{t-1} + \sigma_{x} * z_{t},~~ z_{t} \sim N(0,1)$,
 
-where $\sigma$ is the process standard deviation and $\phi$ is the autoregressive coefficient, transformed as: $\phi=2*\text{plogis}(\text{phiTrans})-1$, which ensures $\phi$ remains in the range (-1,1). The stationary variance of the process is: $\text{Var}(\lambda)=\frac{\sigma^2}{(1-\phi^2)}$. 
+where $\sigma_{x}$ is the process standard deviation and $\phi$ is the autoregressive coefficient, transformed as: $\phi=2*(1/(1+exp(-\phi_{T})))-1$, which ensures $\phi$ remains in the range (-1,1). The stationary variance of the process is: $\text{Var}(x)=\frac{\sigma_{x}^2}{(1-\phi^2)}$. 
 
 Under a random-effects model, the process approach puts the random effect on $x_{t}$, while in the deviations approach, the random effect is applied to $z_{t}$. The joint negative log likelihood for this process is computed in state-space form where the process of the current time step is dependent on the previous one and observations, $y$ are *iid* Normal.
 
@@ -136,15 +136,17 @@ The MA1 model is defined as: $x_t = w_t + \theta w_{t-1}$, using two parameteriz
 
 $w_{t} = x_{t} - \theta w_{t-1}$<br>
 $w_t \sim N(0, \sigma_{x})$<br>
-$y_{t} \sim N(x_{t}, \sigma_{y})$<br>
 where $w$ and $x$ are treated as random
 
-** Deviations Parameterization**  
+**Deviations Parameterization**  
 
 $w_t \sim N(0, \sigma_{w})$<br>
 $x_{t} = w_{t} + \theta w_{t-1}$<br>
-$y_{t} \sim N(x_{t}, \sigma_{y})$<br>
 where $w$ is treated as random.
+
+The joint negative log likelihood for the AR1 and MA1 is computed in state-space form where the process of the current time step is dependent on the previous one and observations, $y$ are *iid* Normal:
+
+$y_{t} /sim N(x_{t}, \sigma_{y})$
 
 In addition to the simple time series model, we used an age-structured model based on the `simplefsa` fisheries
 dataset [more detail from Anders]. The model tracks log-numbers-at-age
@@ -174,6 +176,8 @@ $$\log N_{1,y} = \phi \log N_{1,y-1} + \mu_R(1 - \phi) + \sigma_R z_y, \quad z_y
 where the AR parameter $\phi = 2\,\text{logit}^{-1}(\tilde\phi_R) - 1$.
 
 ## Estimation
+
+We ran a benchmark analyses separatly on the simulated AR1 and MA1 data sets under the two parameterizations to look at the effect of increasing sample size on performance using the {bench} package. Median run time and memory usage were compared for calls to MakeADFun, nlminb, and total values.
 
 We compared five model implementations across the two recruitment
 dynamics formulations (MA(1) and AR(1)), varying in the choice of random

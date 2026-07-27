@@ -78,17 +78,17 @@ for (ii in 1:10) {
 
   # run process model
   obj_process_dautoreg <- MakeADFun(ar1_process_dautoreg, par, random = "x",
-                                   silent = TRUE)
+                                    silent = TRUE)
   opt_process_dautoreg <- nlminb(obj_process_dautoreg$par,
-                                obj_process_dautoreg$fn,
-                                obj_process_dautoreg$gr,
-                                control = list(iter.max = 1000,
-                                               eval.max = 1000))
+                                 obj_process_dautoreg$fn,
+                                 obj_process_dautoreg$gr,
+                                 control = list(iter.max = 1000,
+                                                eval.max = 1000))
 
   # run deviations model
   obj_deviations <- MakeADFun(ar1_deviations, par, random = "x", silent = TRUE)
   opt_deviations <- nlminb(obj_deviations$par, obj_deviations$fn,
-                           obj_deviations$gr, 
+                           obj_deviations$gr,
                            control = list(iter.max = 1000, eval.max = 1000))
 }
 
