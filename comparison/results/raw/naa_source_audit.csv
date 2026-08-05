@@ -1,0 +1,6 @@
+"script","issue","detected"
+"simplefsa/basicNAA_ar_good.R","logNAA is declared as a flat vector but indexed with [age, year]",TRUE
+"simplefsa/basicNAA_ar_bad.R","sdAR is referenced but never defined",TRUE
+"simplefsa/basicNAA_ar_bad.R","phiAR is referenced but never defined",TRUE
+"simplefsa/basicNAA_ar_bad.R","logNAA is referenced but absent from the parameter list",TRUE
+"simplefsa/basicNAA_ar_bad.R","random='logN1A' names a parameter absent from the parameter list",TRUE

@@ -1,0 +1,3 @@
+"engine","objective","gradient_phi","gradient_log_sd","estimate_phi","estimate_log_sd","fit_objective","fit_gradient_phi","fit_gradient_log_sd","optimization_converged","structure","backend","random_effects","active_directions","hdot_workers"
+"quadra",7935.59680096907,-2141.82475023652,-4338.637963539,4.14737844793045,2.19187287499931,5538.90708306688,-5.80523980187042e-06,6.71310663946656e-06,1,"tridiagonal","tridiagonal",44,2,2
+"rtmb",7935.59680096907,-2141.82475023652,-4338.637963539,4.14738083978332,2.19187361766665,5538.90708306688,1.3345467232902e-05,-2.61772938380455e-05,1,"tridiagonal","rtmb_sparse_ad",44,NA,NA

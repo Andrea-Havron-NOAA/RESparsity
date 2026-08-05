@@ -1,0 +1,3 @@
+"engine","objective","gradient_norm","fit_objective","fit_gradient_norm","optimization_converged","structure","backend","fixed_effects","random_effects","active_directions","hdot_workers"
+"quadra",7935.59680096907,9415.4724387921,307.204525133478,7.2331800031487e-05,1,"tridiagonal","tridiagonal",66,44,4,4
+"rtmb",7935.59680096907,9415.4724387921,307.204525145443,0.00218753842211318,1,"tridiagonal","rtmb_sparse_ad",66,44,NA,NA

@@ -1,0 +1,3 @@
+"engine","objective","gradient_norm","fit_objective","fit_gradient_norm","optimization_converged","structure","backend","fixed_effects","random_effects","active_directions","hdot_workers"
+"quadra",7934.67786243587,9415.93327937176,259.117545977876,5.92861472720179e-05,1,"dense","dense_ldlt",66,45,4,4
+"rtmb",7934.67786243586,9415.93327937177,259.117545978769,0.000656629523898955,1,"dense","rtmb_sparse_ad",66,45,NA,NA

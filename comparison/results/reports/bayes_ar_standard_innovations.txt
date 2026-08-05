@@ -1,0 +1,166 @@
+Functional Analysis Report
+==========================
+
+Optimization
+------------
+objective_value:            4.17136656947898
+gradient_norm:              0.472367612872141
+max_gradient_parameter:     fixed_0
+max_gradient_value:         -0.472367612872141
+max_abs_gradient:           0.472367612872141
+iterations:                 1
+converged:                  yes
+message:                    Converged: gradient norm below tolerance.
+
+Curvature
+---------
+positive_definite:          yes
+min_eigenvalue:             2.81773096192293
+max_eigenvalue:             4.44791144030286
+condition_number_abs:       1.57854369363476
+
+Backend Selection
+-----------------
+detected_structure:         dense
+selected_backend:           dense_ldlt
+solver_recommendation:      LBFGS
+bandwidth:                  3
+expected_complexity:        O(n^3)
+symbolic_reuse:             not required
+selection_reason:           small matrix; dense LDLT preferred
+
+Spectral Structure
+------------------
+available:                  yes
+eigen_count:                4
+positive_eigen_count:       4
+near_zero_eigen_count:      0
+negative_eigen_count:       0
+largest_eigen_share:        0.314646280832335
+effective_rank_entropy:     3.93970979377318
+normalized_entropy:         0.989044681020492
+participation_ratio:        3.88057844431002
+stable_rank:                2.60290506008368
+leading_gap_ratio:          1.19357371363784
+eigen_count_for_50%:        2
+eigen_count_for_90%:        4
+eigen_count_for_95%:        4
+eigen_count_for_99%:        4
+
+rank,eigenvalue,cumulative_curvature_share
+1,4.44791144030286,0.314646280832335
+2,3.72654942839371,0.578263246619339
+3,3.14403577244254,0.800673062075445
+4,2.81773096192293,1
+
+Huu Structure
+-------------
+random_effects:             4
+total_entries:              16
+structural_nonzeros:        16
+structural_density:         1
+
+Effective Sparsity
+------------------
+curvature_retained,entries_required,entry_share,compression_vs_structural
+90%,8,0.5,2
+95%,10,0.625,1.6
+97%,10,0.625,1.6
+98%,11,0.6875,1.45454545454545
+99%,13,0.8125,1.23076923076923
+99.5%,14,0.875,1.14285714285714
+99.9%,16,1,1
+100%,16,1,1
+
+Effective Bandwidth
+-------------------
+curvature_retained,bandwidth,entry_count_if_banded,entry_share_if_banded
+90%,1,10,0.625
+95%,1,10,0.625
+97%,1,10,0.625
+98%,1,10,0.625
+99%,2,14,0.875
+99.5%,2,14,0.875
+99.9%,3,16,1
+100%,3,16,1
+
+Uncertainty
+-----------
+covariance_available:       yes
+correlation_available:      yes
+covariance_size:            4 x 4
+min_variance:               0.28669245005868
+max_variance:               0.294659155460458
+min_variance_index:         0
+max_variance_index:         3
+max_abs_correlation:        0.139414365876299
+max_abs_correlation_pair:   0,1
+count_abs_corr_gt_0_5:      0
+count_abs_corr_gt_0_8:      0
+count_abs_corr_gt_0_9:      0
+
+Parameter Influence
+-------------------
+available:                  yes
+Top parameter importance
+index,name,variance,sd,variance_share,correlation_centrality,correlation_centrality_share,curvature_column_norm,curvature_diagonal,importance_score,importance_share
+1,latent_1,0.292375184512558,0.540717287048008,0.250723191988205,0.284054858340175,0.331559680796725,3.63201341848103,3.55984864490289,2.52174563161699,0.267860467759505
+2,latent_2,0.292400612040913,0.540740799312307,0.250744997091413,0.280809155453506,0.327771172410165,3.62576983552804,3.55611481810898,2.51115658064264,0.266735696049164
+0,latent_0,0.28669245005868,0.535436690990336,0.245850024233312,0.147746089853997,0.17245487958629,3.59709748319499,3.5599941036569,2.21057959815531,0.23480833187835
+3,latent_3,0.294659155460458,0.54282516104217,0.25268178668707,0.144113059004676,0.168214267206821,3.49554242705721,3.46027003639326,2.17091835363279,0.230595504312981
+
+Top correlation pairs
+i,j,name_i,name_j,correlation,abs_correlation
+0,1,latent_0,latent_1,-0.139414365876299,0.139414365876299
+1,2,latent_1,latent_2,-0.136945676810699,0.136945676810699
+2,3,latent_2,latent_3,-0.135974999008304,0.135974999008304
+0,2,latent_0,latent_2,-0.00788847963450344,0.00788847963450344
+1,3,latent_1,latent_3,-0.00769481565317715,0.00769481565317715
+0,3,latent_0,latent_3,-0.000443244343194951,0.000443244343194951
+
+Correlation Graph
+-----------------
+available:                  yes
+abs_correlation_threshold:  0.5
+node_count:                 4
+edge_count:                 0
+average_degree:             0
+maximum_degree:             0
+maximum_degree_parameter:   latent_0
+connected_components:       4
+largest_component_size:     1
+graph_diameter:             0
+
+Parameter Geometry
+------------------
+available:                  no
+dominant_parameter:
+dominant_parameter_index:   0
+dominant_curvature_norm:    nan
+index,name,gradient,abs_gradient,curvature_column_norm,curvature_diagonal,curvature_share
+
+Gradient Volatility
+-------------------
+available:                  no
+perturbation_scale:         0
+samples:                    0
+baseline_gradient_norm:     nan
+mean_gradient_norm:         nan
+sd_gradient_norm:           nan
+max_gradient_norm:          nan
+gradient_norm_cv:           nan
+most_volatile_parameter:
+most_volatile_parameter_sd: nan
+most_sign_flips_parameter:
+most_sign_flips:            0
+
+Latent States
+-------------
+count:                      4
+mean:                       0.435620810080604
+sd:                         0.322004232944995
+min_value:                  -0.0205362485009595
+max_value:                  0.842265440854571
+min_index:                  0
+max_index:                  2
+l2_norm:                    1.08342460044024

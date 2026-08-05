@@ -55,3 +55,6 @@ rsconnect/
 *.woff
 *.css
 .DS_Store
+
+# Clean Quadra worktree used by the cross-engine comparison suite.
+/quadra/
