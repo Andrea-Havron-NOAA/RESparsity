@@ -1,16 +1,16 @@
 Functional Analysis Report
 ==========================
 
-Optimization
-------------
+Parity-Point and Latent-Mode Status
+-----------------------------------
 objective_value:            4.22118997734713
-gradient_norm:              0.231236105000721
-max_gradient_parameter:     fixed_0
-max_gradient_value:         -0.231236105000721
-max_abs_gradient:           0.231236105000721
-iterations:                 0
-converged:                  yes
-message:                    Converged: gradient norm below tolerance.
+marginal_fixed_gradient_norm: 0.231236105000721
+max_marginal_gradient_parameter: fixed_0
+max_marginal_gradient_value:  -0.231236105000721
+max_abs_marginal_gradient:    0.231236105000721
+latent_mode_iterations:       0
+latent_mode_converged:        yes
+latent_mode_message:          Converged: latent gradient norm below tolerance.
 
 Curvature
 ---------

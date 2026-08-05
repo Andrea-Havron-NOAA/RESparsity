@@ -24,11 +24,21 @@ inline void replace_all(std::string &text, const std::string &from,
   }
 }
 
-inline void clarify_parity_point_markdown(const std::string &path) {
+inline std::string read_text_file(const std::string &path) {
   std::ifstream input(path);
-  const std::string original((std::istreambuf_iterator<char>(input)),
-                             std::istreambuf_iterator<char>());
-  std::string clarified = original;
+  return std::string((std::istreambuf_iterator<char>(input)),
+                     std::istreambuf_iterator<char>());
+}
+
+inline void write_text_file(const std::string &path, const std::string &text) {
+  std::ofstream output(path);
+  output << text;
+}
+
+inline void clarify_parity_point_outputs(const std::string &markdown_path,
+                                         const std::string &text_path,
+                                         const std::string &csv_path) {
+  std::string clarified = read_text_file(markdown_path);
   replace_all(clarified, "**Optimization quality:**",
               "**Parity-point quality:**");
   replace_all(clarified, "**Optimization:** converged",
@@ -42,8 +52,68 @@ inline void clarify_parity_point_markdown(const std::string &path) {
   replace_all(clarified, "- Converged:", "- Latent mode converged:");
   replace_all(clarified, "- Max gradient parameter:",
               "- Maximum marginal-gradient parameter:");
-  std::ofstream output(path);
-  output << clarified;
+  replace_all(clarified, "Optimization\n------------",
+              "Parity-Point and Latent-Mode Status\n"
+              "-----------------------------------");
+  replace_all(clarified, "gradient_norm:              ",
+              "marginal_fixed_gradient_norm: ");
+  replace_all(clarified, "max_gradient_parameter:     ",
+              "max_marginal_gradient_parameter: ");
+  replace_all(clarified, "max_gradient_value:         ",
+              "max_marginal_gradient_value:  ");
+  replace_all(clarified, "max_abs_gradient:           ",
+              "max_abs_marginal_gradient:    ");
+  replace_all(clarified, "iterations:                 ",
+              "latent_mode_iterations:       ");
+  replace_all(clarified, "converged:                  ",
+              "latent_mode_converged:        ");
+  replace_all(clarified, "message:                    ",
+              "latent_mode_message:          ");
+  replace_all(clarified, "Converged: gradient norm below tolerance.",
+              "Converged: latent gradient norm below tolerance.");
+  write_text_file(markdown_path, clarified);
+
+  clarified = read_text_file(text_path);
+  replace_all(clarified, "Optimization\n------------",
+              "Parity-Point and Latent-Mode Status\n"
+              "-----------------------------------");
+  replace_all(clarified, "gradient_norm:              ",
+              "marginal_fixed_gradient_norm: ");
+  replace_all(clarified, "max_gradient_parameter:     ",
+              "max_marginal_gradient_parameter: ");
+  replace_all(clarified, "max_gradient_value:         ",
+              "max_marginal_gradient_value:  ");
+  replace_all(clarified, "max_abs_gradient:           ",
+              "max_abs_marginal_gradient:    ");
+  replace_all(clarified, "iterations:                 ",
+              "latent_mode_iterations:       ");
+  replace_all(clarified, "converged:                  ",
+              "latent_mode_converged:        ");
+  replace_all(clarified, "message:                    ",
+              "latent_mode_message:          ");
+  replace_all(clarified, "Converged: gradient norm below tolerance.",
+              "Converged: latent gradient norm below tolerance.");
+  write_text_file(text_path, clarified);
+
+  clarified = read_text_file(csv_path);
+  replace_all(clarified, "optimization,objective_value",
+              "parity_point,objective_value");
+  replace_all(clarified, "optimization,gradient_norm",
+              "parity_point,marginal_fixed_gradient_norm");
+  replace_all(clarified, "optimization,max_gradient_parameter",
+              "parity_point,max_marginal_gradient_parameter");
+  replace_all(clarified, "optimization,max_gradient_value",
+              "parity_point,max_marginal_gradient_value");
+  replace_all(clarified, "optimization,max_abs_gradient",
+              "parity_point,max_abs_marginal_gradient");
+  replace_all(clarified, "optimization,iterations",
+              "latent_mode,newton_iterations");
+  replace_all(clarified, "optimization,converged",
+              "latent_mode,converged");
+  replace_all(clarified, "optimization,message", "latent_mode,message");
+  replace_all(clarified, "Converged: gradient norm below tolerance.",
+              "Converged: latent gradient norm below tolerance.");
+  write_text_file(csv_path, clarified);
 }
 
 inline void write_quadra_fixed_diagnostics(
@@ -168,7 +238,7 @@ inline void write_quadra_diagnostics(
   config.effective_bandwidth_95 = effective_bandwidth_95;
   quadra::diagnostics::write_markdown_report(config);
   if (parity_point)
-    clarify_parity_point_markdown(markdown_path);
+    clarify_parity_point_outputs(markdown_path, text_path, csv_path);
 }
 
 } // namespace comparison

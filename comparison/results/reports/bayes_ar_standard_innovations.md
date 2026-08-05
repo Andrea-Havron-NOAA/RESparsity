@@ -128,16 +128,16 @@ This report demonstrates why Quadra's functional analysis diagnostics are useful
 Functional Analysis Report
 ==========================
 
-Optimization
-------------
+Parity-Point and Latent-Mode Status
+-----------------------------------
 objective_value:            4.17136656947898
-gradient_norm:              0.472367612872141
-max_gradient_parameter:     fixed_0
-max_gradient_value:         -0.472367612872141
-max_abs_gradient:           0.472367612872141
-iterations:                 1
-converged:                  yes
-message:                    Converged: gradient norm below tolerance.
+marginal_fixed_gradient_norm: 0.472367612872141
+max_marginal_gradient_parameter: fixed_0
+max_marginal_gradient_value:  -0.472367612872141
+max_abs_marginal_gradient:    0.472367612872141
+latent_mode_iterations:       1
+latent_mode_converged:        yes
+latent_mode_message:          Converged: latent gradient norm below tolerance.
 
 Curvature
 ---------
