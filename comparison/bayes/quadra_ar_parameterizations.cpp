@@ -117,11 +117,13 @@ void run_case(const char *label, const Parameterization parameterization,
     comparison::write_quadra_diagnostics(
         diagnostics_dir + "/bayes_ar_" + label,
         std::string("Bayesian AR Diagnostics: ") + label,
-        "Quadra diagnostics at the parameterization parity evaluation point.",
+        "Quadra diagnostics at the parameterization parity evaluation point. "
+        "The latent mode converged; the fixed effects were held fixed and were "
+        "not optimized.",
         result.objective.laplace_objective_m, result.gradient,
         result.objective.newton_iterations_m, result.objective.converged_m,
         result.objective.message_m, result.objective.hessian_random_m,
-        result.objective.u_hat_m, names, 1);
+        result.objective.u_hat_m, names, 1, true);
   }
 
   std::cout << "quadra," << label << "," << result.objective.laplace_objective_m

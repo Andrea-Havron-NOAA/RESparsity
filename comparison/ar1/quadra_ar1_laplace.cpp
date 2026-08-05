@@ -75,11 +75,13 @@ int main(int argc, char **argv) {
       names.push_back("x_" + std::to_string(i));
     comparison::write_quadra_diagnostics(
         argv[1], "Latent AR(1) Laplace Diagnostics",
-        "Quadra diagnostics at the objective/gradient parity evaluation point.",
+        "Quadra diagnostics at the objective/gradient parity evaluation point. "
+        "The latent mode converged; the fixed effects were held fixed and were "
+        "not optimized.",
         exact.objective.laplace_objective_m, exact.gradient,
         exact.objective.newton_iterations_m, exact.objective.converged_m,
         exact.objective.message_m, exact.objective.hessian_random_m,
-        exact.objective.u_hat_m, names, 1);
+        exact.objective.u_hat_m, names, 1, true);
   }
 
   std::cout << std::setprecision(17);

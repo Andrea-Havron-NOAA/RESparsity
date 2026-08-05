@@ -9,10 +9,42 @@
 #include <cmath>
 #include <fstream>
 #include <iomanip>
+#include <iterator>
 #include <string>
 #include <vector>
 
 namespace comparison {
+
+inline void replace_all(std::string &text, const std::string &from,
+                        const std::string &to) {
+  std::size_t position = 0;
+  while ((position = text.find(from, position)) != std::string::npos) {
+    text.replace(position, from.size(), to);
+    position += to.size();
+  }
+}
+
+inline void clarify_parity_point_markdown(const std::string &path) {
+  std::ifstream input(path);
+  const std::string original((std::istreambuf_iterator<char>(input)),
+                             std::istreambuf_iterator<char>());
+  std::string clarified = original;
+  replace_all(clarified, "**Optimization quality:**",
+              "**Parity-point quality:**");
+  replace_all(clarified, "**Optimization:** converged",
+              "**Latent mode:** converged");
+  replace_all(clarified, "| Optimization |", "| Latent mode |");
+  replace_all(clarified, "gradient norm =",
+              "marginal fixed-effect gradient norm =");
+  replace_all(clarified, "## Optimization", "## Parity-Point Evaluation");
+  replace_all(clarified, "- Gradient norm:",
+              "- Marginal fixed-effect gradient norm:");
+  replace_all(clarified, "- Converged:", "- Latent mode converged:");
+  replace_all(clarified, "- Max gradient parameter:",
+              "- Maximum marginal-gradient parameter:");
+  std::ofstream output(path);
+  output << clarified;
+}
 
 inline void write_quadra_fixed_diagnostics(
     const std::string &path, const std::string &title, double objective,
@@ -85,7 +117,7 @@ inline void write_quadra_diagnostics(
     const std::string &message, const Eigen::SparseMatrix<double> &hessian,
     const std::vector<double> &latent_states,
     const std::vector<std::string> &random_effect_names,
-    std::size_t fixed_effect_count) {
+    std::size_t fixed_effect_count, bool parity_point = false) {
   quadra::FunctionalOptimizationSummary optimization;
   optimization.objective_value = objective;
   optimization.iterations = iterations;
@@ -135,6 +167,8 @@ inline void write_quadra_diagnostics(
   config.effective_entries_95 = effective_entries_95;
   config.effective_bandwidth_95 = effective_bandwidth_95;
   quadra::diagnostics::write_markdown_report(config);
+  if (parity_point)
+    clarify_parity_point_markdown(markdown_path);
 }
 
 } // namespace comparison

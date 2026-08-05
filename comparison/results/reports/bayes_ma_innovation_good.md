@@ -1,14 +1,14 @@
 # Bayesian MA Diagnostics: innovation_good
 
-Quadra diagnostics at the parameterization parity evaluation point.
+Quadra diagnostics at the parameterization parity evaluation point. The latent mode converged; the fixed effects were held fixed and were not optimized.
 
 ## Executive Summary
 
 - **Overall status:** `REVIEW`.
 - **Confidence:** `LOW`.
-- **Optimization quality:** `REVIEW`.
+- **Parity-point quality:** `REVIEW`.
 - **Uncertainty structure:** `LOCAL`.
-- **Optimization:** converged = `yes`, gradient norm = `0.655796536381041`.
+- **Latent mode:** converged = `yes`, marginal fixed-effect gradient norm = `0.655796536381041`.
 - **Curvature health:** positive definite = `yes`, condition number = `1.95600405252386`.
 - **Quadra factorization:** structure = `tridiagonal`, backend = `tridiagonal`.
 - **Latent structure:** `4` random effects were estimated.
@@ -19,8 +19,8 @@ Quadra diagnostics at the parameterization parity evaluation point.
 
 | Check | Status | Evidence |
 |---|---:|---|
-| Optimization | `PASS` | converged = `yes` |
-| Gradient quality | `CHECK` | gradient norm = `0.655796536381041` |
+| Latent mode | `PASS` | converged = `yes` |
+| Gradient quality | `CHECK` | marginal fixed-effect gradient norm = `0.655796536381041` |
 | Curvature | `PASS` | positive definite = `yes` |
 | Conditioning | `EXCELLENT` | condition number = `1.95600405252386` |
 | Overall status | `REVIEW` | rule-based v1 diagnostic |
@@ -41,13 +41,13 @@ Quadra diagnostics at the parameterization parity evaluation point.
 | Effective bandwidth for 95% curvature | `1` |
 | 95% curvature compression | `1.11111x` |
 
-## Optimization
+## Parity-Point Evaluation
 
 - Quality: `REVIEW`
 - Objective value: `5.0511811613296`
-- Gradient norm: `0.655796536381041`
-- Converged: `yes`
-- Max gradient parameter: `fixed_0`
+- Marginal fixed-effect gradient norm: `0.655796536381041`
+- Latent mode converged: `yes`
+- Maximum marginal-gradient parameter: `fixed_0`
 
 ## Curvature
 
