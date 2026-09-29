@@ -22,7 +22,7 @@ ar1_process_dautoreg <- function(par) {
 
   nll
 }
-
+1
 ar1_deviations <- function(par) {
   getAll(dat, par)
   phi <- 2 * plogis(tPhi) - 1
@@ -182,7 +182,7 @@ df |>
              mapping = aes(x = n, y = total_time, color = method)) +
   scale_x_log10() +
   scale_y_log10() +
-  labs(x = "Number of time steps (N) - Log Scale", y = "Median time, 
+  labs(x = "Number of time steps (N) - Log Scale", y = "Median time,
        (seconds) - Log Scale", color = "Method") +
   theme_minimal() + facet_wrap(~func, labeller = as_labeller(facet_names)) +
   theme(strip.text = element_text(face = "bold"))
@@ -195,7 +195,7 @@ df |>
   geom_point() +
   geom_line(data = df_total, mapping = aes(x = n, y = total_memory, color = method)) +
   geom_point(data = df_total, mapping = aes(x = n, y = total_memory, color = method)) +
-  labs(x = "Number of time steps (N)", y = "Memory allocation", 
+  labs(x = "Number of time steps (N)", y = "Memory allocation",
        color = "Method") +
   theme_minimal() + facet_wrap(~func, labeller = as_labeller(facet_names)) +
   theme(strip.text = element_text(face = "bold"))
