@@ -22,7 +22,7 @@ ar1_process_dautoreg <- function(par) {
 
   nll
 }
-1
+
 ar1_deviations <- function(par) {
   getAll(dat, par)
   phi <- 2 * plogis(tPhi) - 1

@@ -5,6 +5,7 @@ date: "`r format(Sys.Date(), '%B %d, %Y')`"
 output: 
   bookdown::word_document2:
     number_sections: true
+bibliography: references.bib
 editor_options: 
   markdown: 
     wrap: 72
@@ -20,6 +21,11 @@ library(gridExtra)
 library(dplyr)
 library(tidyr)
 library(knitr)
+library(here)
+
+# generate bib file
+source(here("FisheriesResearch_manuscript/BuildBibFile.R"))
+build_bib_file()
 ```
 
 \
@@ -88,65 +94,92 @@ passed directly to Stan
 * need to decide on jargon: innovations vs deviations? process v. log-recruitment? etc
 
 # Introduction
-Drawing from the Bayesian literature, it is clear that model efficiency is not merely a matter of software implementation but is fundamentally tied to the geometric properties of the posterior distribution. In MCMC sampling, particularly within the Hamiltonian Monte Carlo (HMC) framework utilized by Stan, the choice between centered and non-centered parameterizations is often a response to the funnel geometry pathology (Betancourt & Girolami, 2015). This pathology occurs when a sampler struggles to explore the narrow regions of a distribution where the group-level variance is small -- a common issue in hierarchical models with sparse data (Monnahan et al., 2016). Specifically, a non-centered parameterization effectively stretches this funnel, allowing HMC to sample more efficiently by breaking the strong a priori dependence between hierarchical levels (Gorinova et al., 2019). However, if the data are highly informative, a centered parameterization may actually be more efficient, as the data can "pin down" the parameters and reduce the correlations that otherwise slow down the sampler (Papaspiliopoulos et al., 2007; Gorinova et al., 2019). 
 
-Within the context of fisheries stock assessment models, there are many examples of hierarchical variables being estimated with centered or non-centered pararmeterizations; one of the clearest example of this is when variability is added to recruitment either by modeling the process itself, $recruitment ~ N(\mu_{r}, \sigma_{r})$ (centered parameterization), or by modeling the deviations around a mean, $deviations ~ N(0, \sigma_{r}), recruitment = \mu_{r}*\sigma_{r}$ (non-centered parameterizations). Historically, models reliant on ADMB estimate the deviations as fixed effects undered a constrained optimization where the variance, $\sigma_{r}$ is fixed. In several tools, such as Stock Synthesis (SS3, CITE Methot and Wetzel), sum to zero constraints have been applied to ensure that Hessian matrices are positive definite. A fixed-effect vector of deviation parameters does not require second order partial derivatives to be estimated until model optimization is complete and variance is estimated. 
+Hierarchical model efficiency is not merely a matter of software implementation but is fundamentally tied to the the geometric and structural properties of the statistical model. State-space time series models, which fit a latent state to account for unobserved variability in the data, are structured under Markov properties of conditional indepence dictating that the past and present are independent conditional on the present, and that observations are conditionally independent given the latent state [@Aeberhard_2018, @Auger_M_th__2021, @Shumway_2025]. The Markov property of the latent state, however, is sensitive to its parameterization which can result in different structures and geometries that have a direct result on model efficiency.    
 
-Several next generation stock assessment models have changed dependency from ADMB to Template Model Builder (Kristensen et al., 2016) in order to incorporate the use of the Laplace approximation to integrate out hierarchical variables (i.e. random effects), allowing the estimation of the hierarchical variance parameter, e.g. $\sigma_{r}$ (SAM, Nielsen and Berg, 2014; WHAM, Stock and Miller, 2021; FIMS, CITE). The Laplace approximation requires up to third-order derivates for its evaluations, thus necessitating a Jacobian calculation and Hessian inversion at each optimization step. By contrast to SS3's deviations approach, these state-space platforms  treat log-recruitment itself as the latent state, and estimate $\sigma_{r}$ directly within the Laplace approximation. As assessment scientists migrate legacy ADMB models to these state-space frameworks, or build new models, the choice between the two parameterizations is no longer a matter of computational convenience but a design decision with direct consequences for run time and sampling efficiency.
+Centered and non-centered parameterizations are frequently used in statistical modeling to improve model efficiency. Under a centered parameterization, the latent state $x|\theta, \sigma_x$ is centered on a distribution, $x \sim N(f(\theta), \sigma_{x})$, which results in a latent state Markov structure in autoregressive models and dependent states in moving average models (Figure \@ref(fig:figure-1)c-d). In contrast, the non-centered parameterization introduces an auxilliary variable, $\epsilon$, to capture the latent variability, so that $x = f(\theta) * \epsilon; \epsilon(0, \sigma_{x})$, which results dependent states in autoregressive models and a latent state Markov structure in moving average models (Figure \@ref(fig:figure-1)c-d). 
 
-The move toward Bayesian fitting of these same stcosk assessment models using adnuts and tmbstan (Monnahan and Kristensen, 2018) has made this parameterization question important for a second reason. Outstanding technical issues in Bayesian data-rich stock assessment include challenges to parameterizing assessments to be amenable to the estimation of process errors, a step not consistently taken in current operational Bayesian assessments using NUTS (Monnahan et al., 2019). Comparable parameterization comparisons have been conducted for Bayesian state-space surplus production models; these include comparing sampling diagnostics, sampling efficiency, and posterior inferences among multiple parameterizations of a state-space biomass dynamics model (Best and Punt, 2020) and for hierarchical population models more generally (Monnahan et al., 2017), but to our knowledge no equivalent comparison exists for age-structured recruitment processes under alternative random effect error structures.
+```{r figure-1, echo=FALSE, fig.cap="Sparsity Structure. a). Cost of Sparsity. b) Sparsity and speed. c) AR1 and Sparsity. d) MA1 and Sparsity. e) Sparsity and the Plus Group", out.width="100%"}
+knitr::include_graphics("../figures/sparsity_concept.png")
+```
 
-To quantify the magnitude of this penalty we investigate the performance and optimization time of a simple random effects model under equivalent sparse vs dense parameterizations. For this example we utilize two simple proxy models; an autoregressive model and a simple stock assessment model based on babySAM (CITE). These proxies should reflect the relative performance gains expected in the real-world correlated time-varying processes modeled in stock assessments such as recruitment. Each of these time-series models can be parameterized as a dense matrix, representing the traditional parameter deviations as a random-effects approach, or as a sparse matrix, as would be achieved by directly estimating annual parameter values as random effects.
+How these parameterizations affect computational efficiency can depend on the method of inference. In Bayesian analysis, the *apriori* correlation between the latent state and the fixed effects parameters have an impact on the geometry of the posterior. In MCMC sampling, particularly within the Hamiltonian Monte Carlo (HMC) framework utilized by Stan, the choice between centered and non-centered parameterizations is often a response to the funnel geometry pathology (@Betancourt_2019). This pathology occurs when a sampler struggles to explore the narrow regions of a distribution where the group-level variance is small -- a common issue in hierarchical models with sparse data (?Monnahan et al., 2016). Specifically, a non-centered parameterization effectively stretches this funnel, allowing HMC to sample more efficiently by breaking the strong a priori dependence between hierarchical levels (@Gorinova_2020). However, if the data are highly informative, a centered parameterization may actually be more efficient, as the data can "pin down" the parameters and reduce the correlations that otherwise slow down the sampler (@Papaspiliopoulos_2007, @Gorinova_2020). 
 
-These two approaches are anticipated to produce mathematically equivalent results while differing in their computational overhead. Confirming this equivalency and quantifying the runtime improvement will provide support for the change in approach relative to previous assessment models.
+Under Maximum Likelihood Estimation, the affect of *apriori* dependence between the latent state and fixed parameters is insignificant. Of greater consequence is the structure of the joint Hessian, which is inverted and used in calculations to evaluate the Laplace Approximation and determing parameter confidence intervals. (assign: Anders)
 
-Betancourt, M., & Girolami, M. (2015). https://arxiv.org/abs/1312.0906 
 
-Gorinova 2019 https://doi.org/10.48550/arxiv.1906.03028
+Within the context of fisheries stock assessment models, there are many examples of hierarchical variables being estimated with centered or non-centered pararmeterizations; one of the clearest example of this is when variability is added to recruitment via the centered parameterization, $recruitment \sim N(\mu_{r}, \sigma_{r})$, or by modeling the deviations around a mean, $deviations \sim N(0, \sigma_{r}), recruitment = \mu_{r}*deviations$ (non-centered parameterization). Historically, models reliant on ADMB estimate the deviations as fixed effects undered a constrained optimization where the variance, $\sigma_{r}$ is fixed. In several tools, such as Stock Synthesis (@Methot_2013), sum to zero constraints have been applied to ensure that Hessian matrices are positive definite. A fixed-effect vector of deviation parameters does not require second order partial derivatives to be estimated until model optimization is complete and variance is estimated. 
 
-Papaspiliopoulos 2007 https://projecteuclid.org/journals/statistical-science/volume-22/issue-1/A-General-Framework-for-the-Parametrization-of-Hierarchical-Models/10.1214/088342307000000014.full
+Several next generation stock assessment models have changed dependency from ADMB to Template Model Builder (@Kristensen_2016) in order to incorporate the use of the Laplace approximation to integrate out hierarchical variables (i.e. random effects), allowing the estimation of the hierarchical variance parameter, e.g. $\sigma_{r}$ (@Berg_2016, @Miller_2020; FIMS, CITE). The Laplace approximation requires up to third-order derivates for its evaluations, thus necessitating a Jacobian calculation and Hessian inversion at each optimization step. By contrast to SS3's deviations approach, these state-space platforms treat log-recruitment itself as the latent state, and estimate $\sigma_{r}$ directly within the Laplace approximation. As assessment scientists migrate legacy ADMB models to these state-space frameworks, or build new models, the choice between the two parameterizations is no longer a matter of computational convenience but a design decision with direct consequences for run time and sampling efficiency.
 
-Kristensen et al. (2016) https:://doi.org/10.18637/jss.v070.i05
+The move toward Bayesian fitting of these same stock assessment models using adnuts and tmbstan (@Monnahan_2018) has made this parameterization question important for a second reason. Outstanding technical issues in Bayesian data-rich stock assessment include challenges to parameterizing assessments to be amenable to the estimation of process errors, a step not consistently taken in current operational Bayesian assessments using NUTS (@Monnahan_2019). Comparative parameterizations have been conducted for Bayesian state-space surplus production models; these include comparing sampling diagnostics, sampling efficiency, and posterior inferences among multiple parameterizations of a state-space biomass dynamics model (@Best_2020) and for hierarchical population models more generally (@Monnahan_2016), but to our knowledge no equivalent comparison exists for age-structured recruitment processes under alternative random effect error structures.
 
-EW: Could add ecological refs
+To quantify the magnitude of this penalty we investigate the performance and optimization time under a hierarchical autoregressive and moving average model under equivalent sparse vs dense parameterizations. For this example we utilize two simple proxy models; a time-series model and a stock assessment model based on babySAM (CITE). The latter proxy should reflect the relative performance gains expected in the real-world correlated time-varying processes modeled in stock assessments such as recruitment. Each of these time-series models can be written with both centered and non-centered parameterizations, allowng for benchmark comparisons, which are anticipated to produce mathematically equivalent results while differing in their computational overhead. Confirming this equivalency and quantifying the runtime improvement will provide support for the change in approach relative to previous assessment models.
+
 
 # Methods
 
 ## Software tools
 
-We conducted analyses in both maximum likelihood and Bayesian frameworks using TMB (Template Model Builder), RTMB, tmbstan, and Stan. TMB is an R package that enables efficient estimation of complex statistical models through automatic differentiation and Laplace approximation implemented in C++. RTMB provides a higher-level interface to TMB that allows model specification directly within R. For Bayesian estimation, Stan is a probabilistic programming language and statistical inference platform that uses gradient-based Markov chain Monte Carlo methods, including Hamiltonian Monte Carlo and the No-U-Turn Sampler. The tmbstan package integrates TMB and Stan by applying Stan's sampling algorithms to models specified in TMB, thereby facilitating Bayesian inference for models developed within the TMB framework. Together, these software tools support both maximum-likelihood and Bayesian approaches to fitting complex hierarchical and latent-variable models. [maybe add links to FIMS paper / decisions about why to use these methods / etc]. Iterations (n = 100) were run using the R package **bench** to compare median run times and memory usage. 
+We conducted analyses in both maximum likelihood and Bayesian frameworks using TMB (Template Model Builder), RTMB, tmbstan, and Stan. TMB is an R package that enables efficient estimation of complex statistical models through automatic differentiation and Laplace approximation implemented in C++. RTMB provides a higher-level interface to TMB that allows model specification directly within R. For Bayesian estimation, Stan is a probabilistic programming language and statistical inference platform that uses gradient-based Markov chain Monte Carlo methods, including Hamiltonian Monte Carlo and the No-U-Turn Sampler. The tmbstan package integrates TMB and Stan by applying Stan's sampling algorithms to models specified in TMB, thereby facilitating Bayesian inference for models developed within the TMB framework. Together, these software tools support both maximum-likelihood and Bayesian approaches to fitting complex hierarchical and latent-variable models. [maybe add links to FIMS paper / decisions about why to use these methods / etc]. 
 
-## Simulation models
+## Time series models and parameterizations
 
-We considered both autogregressive AR(1) and moving average MA(1) recruitment structures because they represent distinct hypotheses about the memory of the underlying process generating recruitment variability, and because they can differ in the sparsity of the resulting Hessian matrix. Following standard time-series literature (CITE Shumway and Stoffer book), an MA(1) process has finite memory in that a shock propagates for exactly one time step, whereas an AR(1) process has poteentially infinite memory, with each shock's influence persisting. In the context of fisheries, the AR(1) structure may be more appropriate when approximating a driver that persists across multiple years (ocean regimes, density dependence), while an MA(1) model may better suited for short term pulses (such as cohort effects).  We include both models here to test whether the sparsity results generalize across processes with fundamentally different memory structures.
+We considered both autogregressive AR(1) and moving average MA(1) structures because they represent distinct hypotheses about the memory of the underlying time series process, and because they can differ in the sparsity of the resulting Hessian matrix. Following standard time-series literature (CITE Shumway and Stoffer book), an MA(1) process has finite memory in that a shock propagates for exactly one time step, whereas an AR(1) process has potentially infinite memory, with each shock's influence persisting. In the context of modeling recruitment variability in fisheries, the AR(1) structure may be more appropriate when approximating a driver that persists across multiple years (ocean regimes, density dependence), while an MA(1) model may better suited for short term pulses (such as cohort effects).  We include both models here to test whether the sparsity results generalize across processes with fundamentally different memory structures.
 
-We set up a simple time series model structured using a first-order autoregressive (AR1) and moveing average (MA1) autocorrelation process. Given a latent state, $x_{t}$ at time $t$, the AR1 model is defined as: 
-$x_{t} = \phi * x_{t-1} + \epsilon_{t}$, using two parameterizations:
+ 
+Centered Parameterization
 
-1. process approach: $x_{t} \sim N(\phi * x_{t-1}, \sigma_{x}^{2})$
-2. deviations approach: $x_{t} = \phi * x_{t-1} + \sigma_{x} * z_{t},~~ z_{t} \sim N(0,1)$,
+$x_{t} \sim N(\phi * x_{t-1}, \sigma_{x}^{2})$
+
+Non-centered Parameterization
+
+$x_{t} = \phi * x_{t-1} + z_{t}
+
+z_{t} \sim N(0,\sigma_{x})$,
 
 where $\sigma_{x}$ is the process standard deviation and $\phi$ is the autoregressive coefficient, transformed as: $\phi=2*(1/(1+exp(-\phi_{T})))-1$, which ensures $\phi$ remains in the range (-1,1). The stationary variance of the process is: $\text{Var}(x)=\frac{\sigma_{x}^2}{(1-\phi^2)}$. 
 
-Under a random-effects model, the process approach puts the random effect on $x_{t}$, while in the deviations approach, the random effect is applied to $z_{t}$. The joint negative log likelihood for this process is computed in state-space form where the process of the current time step is dependent on the previous one and observations, $y$ are *iid* Normal.
+Under a random-effects model, the process parameterization puts the random effect on $x_{t}$, while in the deviations parameterization, the random effect is applied to $z_{t}$. The joint negative log likelihood for the AR1 and MA1 is computed in state-space form where the process of the current time step is dependent on the previous one and observations, $obs$ are *iid* Normal:
 
-The MA1 model is defined as: $x_t = w_t + \theta w_{t-1}$, using two parameterizations: 
+$obs_{t} /sim N(x_{t}, \sigma_{obs})$
+
+
+The MA1 model is defined as: $x_t = \epsilon_{t} + \phi \epsilon_{t-1}$, using two parameterizations where the : 
+
+1. process approach: <br>
+
+$\epsilon_{0}$ = eps0$ <br>
+
+$\epsilon_{t+1} = x_{t} - \phi \epsilon_{t}$
+
+$epsilon_t \sim N(0, \sigma_{x})$
+
+2. deviations approach: $x_{t} = w_{t} + \phi w_{t-1}$, with $w_t \sim N(0, \sigma_{w})$ 
+
+where $\sigma_x$
 
 **Process Parameterization**  
 
-$w_{t} = x_{t} - \theta w_{t-1}$<br>
-$w_t \sim N(0, \sigma_{x})$<br>
+$w_{t} = x_{t} - \theta w_{t-1}$ <br>
+
+$w_t \sim N(0, \sigma_{x})$ <br>
+
 where $w$ and $x$ are treated as random
 
 **Deviations Parameterization**  
 
-$w_t \sim N(0, \sigma_{w})$<br>
-$x_{t} = w_{t} + \theta w_{t-1}$<br>
+$w_t \sim N(0, \sigma_{w})$ <br>
+
+$x_{t} = w_{t} + \theta w_{t-1}$ <br>
+
 where $w$ is treated as random.
 
-The joint negative log likelihood for the AR1 and MA1 is computed in state-space form where the process of the current time step is dependent on the previous one and observations, $y$ are *iid* Normal:
+The joint negative log likelihood for the AR1 and MA1 is computed in state-space form where the process of the current time step is dependent on the previous one and observations, $obs$ are *iid* Normal:
 
-$y_{t} /sim N(x_{t}, \sigma_{y})$
+$obs_{t} /sim N(x_{t}, \sigma_{obs})$
+
+### Stock Assessment Model Simulation
 
 In addition to the simple time series model, we used an age-structured model based on the `simplefsa` fisheries
 dataset [more detail from Anders]. The model tracks log-numbers-at-age
@@ -162,7 +195,7 @@ consist of commercial catch-at-age (fleet 1) and survey indices (fleet
 2, ages 1–5), both modeled with lognormal observation error.
 
 We implemented two formulations of recruitment dynamics, not in the same
-model. First, we modeled annual recruitment deviations $\varepsilon_y$
+model. First, we simulated annual recruitment deviations $\varepsilon_y$
 as a first-order moving-average process (MA(1)),
 
 $$\log N_{1,y} = \mu_R + \varepsilon_y + \theta \varepsilon_{y-1}, \quad \varepsilon_y \sim N(0, \sigma_R)$$
@@ -177,11 +210,43 @@ where the AR parameter $\phi = 2\,\text{logit}^{-1}(\tilde\phi_R) - 1$.
 
 ## Estimation
 
-We ran a benchmark analyses separatly on the simulated AR1 and MA1 data sets under the two parameterizations to look at the effect of increasing sample size on performance using the {bench} package. Median run time and memory usage were compared for calls to MakeADFun, nlminb, and total values.
+### Simple Time Series Analysis
+
+We fit four model implementations under varying sample sizes (30 <= n <= 500), comparing both AR1 and MA1 non-centered versus centered parameterizations respectively (Table \@ref(tab:table1)). For each sample size, we ran benchmark analyses (n = 100 iterations) on the four models using the *bench* (@Hester_2025) package. Median run time and memory usage were compared for calls to MakeADFun (tape construction), nlminb (model optimization), and total run times.
+
+
+```{r table1, echo=FALSE}
+model_table <- data.frame(
+  Model = c(
+    "MA1",
+    "MA1",
+    "AR1",
+    "AR1"
+  ),
+  `Random effect` = c(
+    "$w, ~x$",
+    "$w$",
+    "$x$",
+    "$z$"
+  ),
+  Parameterization = c("Centered", "Non-centered", "Centered", "Non-centered"),
+  `Sample Sizes` = rep("{30, 50, 100, 200, 300, 400, 500}", 4),
+  check.names = FALSE
+)
+
+knitr::kable(model_table,
+  caption = "Summary of model implementations for the simple time series.",
+  align   = c("l", "l", "c"),
+  escape  = FALSE
+)
+```
+
+
+### Simple Stock Assessment Analysis 
 
 We compared five model implementations across the two recruitment
 dynamics formulations (MA(1) and AR(1)), varying in the choice of random
-effect and the resulting Hessian sparsity structure (Table \@ref(tab:table1)). For the
+effect and the resulting Hessian sparsity structure (Table \@ref(tab:table2)). For the
 MA(1) models, we compared treating the innovations $\varepsilon_y$ or
 recruitment $\log N_{1,y}$ directly as the random effect. When
 innovations $\varepsilon_y$ are a random effect, $\log N_{1,y}$ is
@@ -219,7 +284,7 @@ specified the target acceptance probability of the NUTS sampler to be
 all standard deviation parameters were given $N(0,1)$ priors on the log
 scale, and all other parameters were given Stan's default flat priors.
 
-```{r table1, echo=FALSE}
+```{r table2, echo=FALSE}
 model_table <- data.frame(
   Model = c(
     "MA",
@@ -246,7 +311,6 @@ knitr::kable(model_table,
 )
 ```
 
-## Summary statistics
 
 For each combination of estimation model and implementation (RTMB, tmbstan, Stan) we summarized across the 100 replicates: mean sampling time
 (seconds), mean and maximum $\hat{R}$, mean effective sample size (ESS),
@@ -255,7 +319,16 @@ presented as mean (SD) across replicates.
 
 # Results
 
-For the AR(1) formulation, we found the strongest support for implementing random effects using the process (log-recruitment) as random effects, instead of the innovations (deviations). Across the 100 simulated datasets, the maximum likelihood optimization in RTMB was faster on average (Table \@ref(tab:table-ar-nodautoreg) vs Table \@ref(table-ar-deviations)). This difference becomes even stronger with our Bayesian comparisons. While we found similar effective sample size (ESS) and run time between `tmbstan` and `rstan`, parameterizing random effects in log-recruitment was more efficient: this approach resulted in 105.1 and 78.6 samples / second for `tmbstan` and `rstan` respectively, versus 6.4 and 17.5 samples / second for each when parameterizing random effects in innovations (Table \@ref(tab:table-ar-nodautoreg) vs Table \@ref(table-ar-deviations)). We found little difference in the AR(1) formulation on maximum likelihood estimation with and without RTMB's `dautoreg` function, (Table \@ref(tab:table-ar-dautoreg) vs Table \@ref(tab:table-ar-nodautoreg)).
+## Time Series Analysis
+
+As sample size increases, computational efficiency followed expected patterns. With respect to AR1 model, both median run times and memory increased at a faster rate under the non-centered parameterization than the centered parameterization and there was an optimal sample size at which efficiency flipped due to the overhead of setting up the tape for the centered parameterization model (Figure). The opposite results were seen in the MA(1) model. Median run times and memory increased at a faster rate under the centered parameterization than the non-centered parameterization. This pattern held at small sample sizes indicating no overhead ...  (Figure). 
+
+insert figure 1
+insert figure 2
+
+# Stock Assessment Analysis
+
+For the AR(1) formulation, we found the strongest support for implementing random effects using the process (log-recruitment) as random effects, instead of the innovations (deviations). Across the 100 simulated datasets, the maximum likelihood optimization in RTMB was faster on average (Table \@ref(tab:table-ar-nodautoreg) vs Table (table-ar-deviations)). This difference becomes even stronger with our Bayesian comparisons. While we found similar effective sample size (ESS) and run time between `tmbstan` and `rstan`, parameterizing random effects in log-recruitment was more efficient: this approach resulted in 105.1 and 78.6 samples / second for `tmbstan` and `rstan` respectively, versus 6.4 and 17.5 samples / second for each when parameterizing random effects in innovations (Table \@ref(tab:table-ar-nodautoreg) vs Table (table-ar-deviations)). We found little difference in the AR(1) formulation on maximum likelihood estimation with and without RTMB's `dautoreg` function, (Table \@ref(tab:table-ar-dautoreg) vs Table \@ref(tab:table-ar-nodautoreg)).
 
 For the MA(1) estimation model, we found that implementing random effects in the deviations resulted in faster maximum likelihood optimization (0.09 sec vs 0.15 sec, \@ref(tab:table-ma-good) \@ref(tab:table-ma-bad) ). Stan and tmbstan implementations had similar average speeds across the two implementations with slight efficiency advantages in `tmbstan` -- with random effects in deviations, `tmbstan` and `rstan` sampled 32.7 and 23.9 samples / sec, respectively, while with random effects in the process (log-recruitment), these approaches samples 30.57 and 25.2 samples / sec (0.09 sec vs 0.15 sec, \@ref(tab:table-ma-good) \@ref(tab:table-ma-bad) ).
 
@@ -396,6 +469,10 @@ kable(tab,
 
 # Discussion
 
+- Next gen software - need research to decide how to parameterize random effects (Andrea)
+
+- Efficiency of sparsity with random effects
+
 - For MA(1) models, we recommend modelling deviations as random effects (good parameterisation). The RTMB implementation was much faster, and treating recruitment as random effects led to really poor estimation for some Bayesian models (Stan)
 
 - For AR(1) models, we recommend using recruitment as random effects. This was much faster than the deviations parameterization
@@ -404,3 +481,12 @@ kable(tab,
 
 
 In contrast to general guidance from the Bayesian hierarchical modeling literature that suggests non-centered parameterizations of random effects are a better default, results from our simulations argue against a single rule of thumb for centering or not centering random effects in fisheries assessment models. The best implementation choice depends on the correlation structure of the underlying process: because recruitment deviations in an MA(1) process only ever propagate to the immediately following year, deviations remain sparse and near-independent, so the deviations parameterization loses little of the efficiency it has under simpler models. Under an AR(1) process, however, each annual deviation's influence compounds forward through every subsequent year, so a deviations parameterization inherits a dense, highly correlated covariance structure that a log-recruitment parameterization avoids entirely. In most assessment models used around the world, the AR(1) model is a far more common structure for recruitment autocorrelation in marine stocks (Thorson et al.). For these cases, directly estimating log-recruitment as the random effect (as SAM and WHAM already do) is likely to yield the highest computational benefits.
+
+- Difference between tmbstan and pure stan - recommended future research direction
+
+- Applies to all processes - NAA as random effects - improves model efficiency but questions remain about the biological implications
+
+- Next gen software needs to consider efficiency in model development and tease apart when it is relevant
+
+# References
+
