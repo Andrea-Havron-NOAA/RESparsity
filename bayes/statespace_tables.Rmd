@@ -1,0 +1,200 @@
+---
+title: 'Model comparison summary'
+author: ''
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output:
+  bookdown::html_document2:
+    toc: true
+editor_options:
+  markdown:
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE, warning = FALSE, message = FALSE,
+  fig.width = 7, fig.height = 5
+)
+library(dplyr)
+library(tidyr)
+library(knitr)
+```
+
+```{r load-data}
+## Results from bayes/statespace/*_comparison.R (100 replicates each).
+res_dir <- "../bayes"
+
+design <- tibble::tribble(
+  ~file,                        ~process, ~random_effect, ~survival,
+  "ma_good_det_results.rds",    "MA(1)",  "innovations",  "Deterministic",
+  "ma_bad_det_results.rds",     "MA(1)",  "states",       "Deterministic",
+  "ma_good_stoch_results.rds",  "MA(1)",  "innovations",  "Stochastic",
+  "ma_bad_stoch_results.rds",   "MA(1)",  "states",       "Stochastic",
+  "ar_good_det_results.rds",    "AR(1)",  "states",       "Deterministic",
+  "ar_bad_det_results.rds",     "AR(1)",  "innovations",  "Deterministic",
+  "ar_good_stoch_results.rds",  "AR(1)",  "states",       "Stochastic",
+  "ar_bad_stoch_results.rds",   "AR(1)",  "innovations",  "Stochastic"
+) |>
+  mutate(column = paste(sub("\\(1\\)", "", process), random_effect))
+
+col_order <- c("MA innovations", "MA states", "AR states", "AR innovations")
+method_labels <- c(tmb = "RTMB", tmbstan = "tmbstan", stan = "Stan")
+
+results <- bind_rows(lapply(seq_len(nrow(design)), function(k) {
+  readRDS(file.path(res_dir, design$file[k])) |>
+    mutate(process = design$process[k],
+           random_effect = design$random_effect[k],
+           survival = design$survival[k],
+           column = design$column[k])
+})) |>
+  mutate(
+    Method = factor(method_labels[method], levels = method_labels),
+    column = factor(column, levels = col_order),
+    survival = factor(survival, levels = c("Deterministic", "Stochastic"))
+  )
+```
+
+## Table of models (via Matt)
+
+All models include the same plus group (age 7+). With deterministic survival,
+numbers at ages 2+ follow the survival equation; with stochastic survival,
+ages 2+ get REs with an estimated process-error SD.
+
+```{r table-design}
+design_table <- data.frame(
+  Survival = c("Deterministic, plus group", "Stochastic, plus group"),
+  `MA innovations` = c("dense", "sparse"),
+  `MA states` = c("dense", "dense"),
+  `AR states` = c("dense", "sparse"),
+  `AR innovations` = c("dense", "dense"),
+  check.names = FALSE
+)
+kable(design_table,
+  caption = "Hessian of the random effects for each model. With stochastic survival, the sparsity refers to the recruitment block.",
+  align = c("l", "c", "c", "c", "c")
+)
+```
+
+## Overview
+
+```{r overview-fn}
+## one value per model, laid out as the design table
+grid_table <- function(df, value_fn, method) {
+  df |>
+    filter(method == !!method) |>
+    group_by(survival, column) |>
+    summarise(value = value_fn(pick(everything())), .groups = "drop") |>
+    pivot_wider(names_from = column, values_from = value) |>
+    select(Survival = survival, any_of(col_order))
+}
+n_conv <- function(d) as.character(sum(d$max_rhat < 1.15, na.rm = TRUE))
+med_ess <- function(d) sprintf("%.0f", median(d$mean_neff, na.rm = TRUE))
+med_min_ess <- function(d) sprintf("%.1f", median(d$min_neff, na.rm = TRUE))
+med_time <- function(d) {
+  t <- d$time_s[is.finite(d$time_s)]
+  if (length(t) == 0) "-" else sprintf("%.2f", median(t))
+}
+```
+
+```{r table-conv-stan}
+kable(grid_table(results, n_conv, "stan"),
+  caption = "Stan: replicates (of 100) with all Rhat < 1.15.", align = c("l", rep("r", 4)))
+```
+
+```{r table-conv-tmbstan}
+kable(grid_table(results, n_conv, "tmbstan"),
+  caption = "tmbstan: replicates (of 100) with all Rhat < 1.15.", align = c("l", rep("r", 4)))
+```
+
+```{r table-ess-stan}
+kable(grid_table(results, med_ess, "stan"),
+  caption = "Stan: median (across replicates) of the mean ESS.", align = c("l", rep("r", 4)))
+```
+
+```{r table-ess-tmbstan}
+kable(grid_table(results, med_ess, "tmbstan"),
+  caption = "tmbstan: median (across replicates) of the mean ESS.", align = c("l", rep("r", 4)))
+```
+
+```{r table-time-rtmb}
+kable(grid_table(results, med_time, "tmb"),
+  caption = "RTMB: median optimisation time (s).", align = c("l", rep("r", 4)))
+```
+
+```{r summary-fn}
+## Summarise key metrics across replicates: mean (SD), as in paper_draft.Rmd
+fmt_mean_sd <- function(x) {
+  x <- x[is.finite(x)]
+  if (length(x) == 0) return("-")
+  if (length(x) == 1) return(sprintf("%.2f", x))
+  sprintf("%.2f (%.2f)", mean(x), sd(x))
+}
+
+make_summary_table <- function(df) {
+  metrics <- c("time_s", "mean_neff", "min_neff", "pars_hi_rhat")
+  labels <- c("Time (s)", "Mean ESS", "Min ESS", "N pars Rhat > 1.15")
+
+  out <- data.frame(Metric = c(labels, "All Rhat < 1.15"))
+  for (tp in levels(df$Method)) {
+    sub <- df[df$Method == tp, ]
+    if (nrow(sub) == 0) next
+    is_mcmc <- tp != "RTMB"
+    col <- sapply(metrics, function(m) {
+      ## RTMB: time only; MCMC: everything but time (MCMC times not shown for now)
+      if (!is_mcmc && m != "time_s") "-"
+      else if (is_mcmc && m == "time_s") "-"
+      else fmt_mean_sd(sub[[m]])
+    })
+    out[[tp]] <- c(
+      col,
+      if (is_mcmc) as.character(sum(sub$max_rhat < 1.15, na.rm = TRUE)) else "-"
+    )
+  }
+  out
+}
+
+model_table <- function(proc, re, surv) {
+  df <- filter(results, process == proc, random_effect == re, survival == surv)
+  kable(make_summary_table(df),
+    caption = sprintf("%s, %s as random effects, %s survival with plus group. Mean (SD) across %d replicates.",
+                      proc, re, tolower(surv), length(unique(df$i))),
+    align = c("l", "r", "r", "r")
+  )
+}
+```
+
+## MA(1) models
+
+```{r table-ma-good-det, results='asis'}
+model_table("MA(1)", "innovations", "Deterministic")
+```
+
+```{r table-ma-bad-det, results='asis'}
+model_table("MA(1)", "states", "Deterministic")
+```
+
+```{r table-ma-good-stoch, results='asis'}
+model_table("MA(1)", "innovations", "Stochastic")
+```
+
+```{r table-ma-bad-stoch, results='asis'}
+model_table("MA(1)", "states", "Stochastic")
+```
+
+## AR(1) models
+
+```{r table-ar-good-det, results='asis'}
+model_table("AR(1)", "states", "Deterministic")
+```
+
+```{r table-ar-bad-det, results='asis'}
+model_table("AR(1)", "innovations", "Deterministic")
+```
+
+```{r table-ar-good-stoch, results='asis'}
+model_table("AR(1)", "states", "Stochastic")
+```
+
+```{r table-ar-bad-stoch, results='asis'}
+model_table("AR(1)", "innovations", "Stochastic")
+```
