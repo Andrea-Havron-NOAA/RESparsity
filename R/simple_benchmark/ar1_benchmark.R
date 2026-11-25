@@ -169,6 +169,16 @@ df_total <- df |>
 df_total$func <- "Total"
 facet_names <- c("obj" = "MakeADFun", "opt" = "nlminb", "Total" = "Total")
 
+# save results
+saveRDS(list(
+  timings = data.frame(n = df$n, method = df$method, func = df$func,
+                       median_time = as.numeric(df$median_time),
+                       memory = as.numeric(df$memory)),
+  totals = data.frame(n = df_total$n, method = df_total$method,
+                      total_time = as.numeric(df_total$total_time),
+                      total_memory = as.numeric(df_total$total_memory))),
+  "R/simple_benchmark/ar1_benchmark.rds")
+
 # plot results
 library(ggplot2)
 png("figures/ar1_benchmark.png", width = 6, height = 4, units = "in", res = 300)

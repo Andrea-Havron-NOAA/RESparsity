@@ -140,11 +140,11 @@ full_results <- bench::press(
 
 # set-up dataframe
 df <- full_results |>
-  dplyr::mutate(expression = as.character(expression)) |> 
+  dplyr::mutate(expression = as.character(expression)) |>
   # 2. Split expression into 'method' and 'func' columns by the underscore
   tidyr::separate_wider_delim(
-    cols = expression, 
-    delim = "_", 
+    cols = expression,
+    delim = "_",
     names = c("method", "func")
   ) |>
   dplyr::select(!where(is.list))
@@ -155,6 +155,16 @@ df_total <- df |>
                    total_memory = sum(mem_alloc))
 df_total$func <- "Total"
 facet_names <- c("obj" = "MakeADFun", "opt" = "nlminb", "Total" = "Total")
+
+# save results
+saveRDS(list(
+  timings = data.frame(n = df$n, method = df$method, func = df$func,
+                       median_time = as.numeric(df$median),
+                       memory = as.numeric(df$mem_alloc)),
+  totals = data.frame(n = df_total$n, method = df_total$method,
+                      total_time = as.numeric(df_total$total_time),
+                      total_memory = as.numeric(df_total$total_memory))),
+  "R/simple_benchmark/ma1_benchmark.rds")
 
 
 # plot results
@@ -169,7 +179,7 @@ df |>
             mapping = aes(x = n, y = total_time |> log(), color = method)) +
   geom_point(data = df_total,
              mapping = aes(x = n, y = total_time |> log(), color = method)) +
-  labs(x = "Number of time steps (N)", y = "Log of Median time, 
+  labs(x = "Number of time steps (N)", y = "Log of Median time,
        log(seconds)", color = "Method") +
   theme_minimal() + facet_wrap(~func, labeller = as_labeller(facet_names)) +
   theme(strip.text = element_text(face = "bold"))
