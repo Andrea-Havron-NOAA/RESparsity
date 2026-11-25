@@ -534,11 +534,11 @@ samples efficiently.
 ### Assessment model
 
 The assessment model was structured after the `simplefsa` data set
-[Anders: one sentence on the stock and the source of these data], which
-consists of seven age-classes and 45 years of data (1963 – 2007). The
-model tracks log-numbers-at-age ($\log N_{a,t}$) over age-classes
-$a = 1, \ldots, A$ and years $t = 1, \ldots, T$. Fishing mortality is
-modelled as a separable age-year product,
+[Anders: fill in one sentence on the stock and the source of these
+data], which consists of seven age-classes and 45 years of data (1963 –
+2007). The model tracks log-numbers-at-age ($\log N_{a,t}$) over
+age-classes $a = 1, \ldots, A$ and years $t = 1, \ldots, T$. Fishing
+mortality is modelled as a separable age-year product,
 $F_{a,t} = \exp(\log F_a + \log F_t)$, with a shared age effect for ages
 5 – 7. Cohorts are propagated forward by the following dynamics:
 
